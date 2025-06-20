@@ -9,6 +9,22 @@ import (
 	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
 )
 
+// Commander executes a command and returns its combined output.
+type Commander interface {
+	CombinedOutput(name string, arg ...string) ([]byte, error)
+}
+
+// execCommander is the default implementation of Commander that executes real commands.
+type execCommander struct{}
+
+func (c *execCommander) CombinedOutput(name string, arg ...string) ([]byte, error) {
+	cmd := exec.Command(name, arg...)
+	return cmd.CombinedOutput()
+}
+
+// cmdr is the command runner used by the package. It can be replaced in tests.
+var cmdr Commander = &execCommander{}
+
 const (
 	accessAppNotFoundMsg = "failed to find Access application"
 	cloudflaredDocURL    = "https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation"
@@ -17,8 +33,7 @@ const (
 var ErrAccessAppNotFound = errors.New("access application not found")
 
 func GetCloudflareAccessTokenForApp(url string) (string, error) {
-	cmd := exec.Command("cloudflared", "access", "login", url)
-	output, err := cmd.CombinedOutput()
+	output, err := cmdr.CombinedOutput("cloudflared", "access", "login", url)
 	logger.Debug("cloudflared.GetCloudflareAccessTokenForApp", "executing cloudflared access login command for %s", url)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
@@ -36,8 +51,7 @@ func GetCloudflareAccessTokenForApp(url string) (string, error) {
 		return "", fmt.Errorf("cloudflared login failed: %s", outputStr)
 	}
 
-	cmd = exec.Command("cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
-	output, err = cmd.CombinedOutput()
+	output, err = cmdr.CombinedOutput("cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
 	logger.Debug("cloudflared.GetCloudflareAccessTokenForApp", "executing cloudflared access token command for %s", url)
 	if err != nil {
 		logger.Error("cloudflared.GetCloudflareAccessTokenForApp", err, "cloudflared token failed: %s", string(output))

@@ -1,46 +1,50 @@
 package internal
 
 import (
+	"context"
 	"errors"
+	"fmt"
 
 	"github.com/sbldevnet/cloudflared-proxy/pkg/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/proxy"
 )
 
+const (
+	DefaultLocalPort       uint16 = 8888
+	DefaultDestinationPort uint16 = 443
+)
+
 type ProxyConfig struct {
-	Address string
-	Port    uint16
-	SkipTLS bool
+	Hostname        string
+	DestinationPort uint16
+	LocalPort       uint16
+	SkipTLS         bool
 }
 
-func ProxyCFAccess(configs []ProxyConfig) error {
-
-	proxyConfigs := make([]proxy.ProxyConfig, len(configs))
+func ProxyCFAccess(ctx context.Context, configs []ProxyConfig) error {
+	proxyConfigs := make([]proxy.CFAccessProxyConfig, len(configs))
 	for i, config := range configs {
-		proxyConfigs[i] = proxy.ProxyConfig{
-			Hostname: config.Address,
-			Port:     config.Port,
+		token, err := cloudflared.GetCloudflareAccessTokenForApp(config.getAddress())
+		if err != nil {
+			if errors.Is(err, cloudflared.ErrAccessAppNotFound) {
+				logger.Warn("proxy.ProxyCFAccess", "Access application not found at %s, continuing without authentication", config.getAddress())
+			} else {
+				return err
+			}
+		}
+
+		proxyConfigs[i] = proxy.CFAccessProxyConfig{
+			Hostname: config.Hostname,
+			Port:     config.LocalPort,
+			Token:    token,
 			SkipTLS:  config.SkipTLS,
 		}
 	}
 
-	for i, proxyConfig := range proxyConfigs {
-		token, err := cloudflared.GetCloudflareAccessTokenForApp(proxyConfig.Hostname)
-		if err != nil {
-			if errors.Is(err, cloudflared.ErrAccessAppNotFound) {
-				logger.Warn("proxy.ProxyCFAccess", "Access application not found at %s, continuing without authentication", proxyConfig.Hostname)
-				continue
-			}
-			return err
-		}
-		proxyConfigs[i].Token = token
-	}
+	return proxy.StartMultipleProxies(ctx, proxyConfigs)
+}
 
-	err := proxy.StartMultipleProxies(proxyConfigs)
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (c ProxyConfig) getAddress() string {
+	return fmt.Sprintf("%s:%d", c.Hostname, c.DestinationPort)
 }
