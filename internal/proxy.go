@@ -12,10 +12,29 @@ import (
 	"github.com/sbldevnet/cloudflared-proxy/pkg/proxy"
 )
 
-func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig) error {
+type ProxyService interface {
+	GetCloudflareAccessTokenForApp(url string) (string, error)
+	StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error
+}
+
+type LiveProxyService struct{}
+
+func NewLiveProxyService() *LiveProxyService {
+	return &LiveProxyService{}
+}
+
+func (s *LiveProxyService) GetCloudflareAccessTokenForApp(url string) (string, error) {
+	return cloudflared.GetCloudflareAccessTokenForApp(url)
+}
+
+func (s *LiveProxyService) StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error {
+	return proxy.StartMultipleProxies(ctx, configs)
+}
+
+func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig, service ProxyService) error {
 	proxyConfigs := make([]proxy.CFAccessProxyConfig, len(configs))
 	for i, config := range configs {
-		token, err := cloudflared.GetCloudflareAccessTokenForApp(config.GetAddress())
+		token, err := service.GetCloudflareAccessTokenForApp(config.GetAddress())
 		if err != nil {
 			if errors.Is(err, cloudflared.ErrAccessAppNotFound) {
 				logger.Warn("proxy.ProxyCFAccess", "Access application not found at %s, continuing without authentication", config.GetAddress())
@@ -38,5 +57,5 @@ func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig) error {
 		}
 	}
 
-	return proxy.StartMultipleProxies(ctx, proxyConfigs)
+	return service.StartMultipleProxies(ctx, proxyConfigs)
 }
