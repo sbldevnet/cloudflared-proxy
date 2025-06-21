@@ -71,6 +71,9 @@ func Run() *cobra.Command {
 				config.SetDefaults(proxyConfigs)
 			}
 
+			logger.Debug("cmd.Run", "Starting %d proxies", len(proxyConfigs))
+			logger.Debug("cmd.Run", "Proxy configs: %v", proxyConfigs)
+
 			err := internal.ProxyCFAccess(cmd.Context(), proxyConfigs, internal.NewLiveProxyService())
 			if err != nil {
 				return err
@@ -99,8 +102,6 @@ func initConfig(cfgFile string) error {
 		viper.SetConfigName("config")
 	}
 
-	viper.AutomaticEnv()
-
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			// Config file not found; ignore error if not explicitly provided
@@ -112,7 +113,9 @@ func initConfig(cfgFile string) error {
 		}
 	}
 
-	logger.Debug("cmd.initConfig", "Config file path: %s", viper.ConfigFileUsed())
+	if cfgFile != "" {
+		logger.Debug("cmd.initConfig", "Config file path: %s", viper.ConfigFileUsed())
+	}
 
 	return nil
 }
