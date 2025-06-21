@@ -6,20 +6,28 @@ import (
 )
 
 const (
-	DefaultLocalPort       uint16 = 8080
+	DefaultLocalPort       uint16 = 8888
 	DefaultDestinationPort uint16 = 443
 )
 
 type ProxyConfig struct {
-	Hostname        string
-	DestinationPort uint16
-	LocalPort       uint16
-	SkipTLS         bool
+	Hostname        string `mapstructure:"hostname"`
+	DestinationPort uint16 `mapstructure:"destinationPort"`
+	LocalPort       uint16 `mapstructure:"localPort"`
+	SkipTLS         bool   `mapstructure:"skipTLS"`
 }
 
-// ParseProxyString parses a string representation of a proxy endpoint
+type Config struct {
+	Proxies []ProxyConfig `mapstructure:"proxies"`
+}
+
+// Parses a string representation of a proxy endpoint
 // into a ProxyConfig struct. The format is [LOCAL_PORT:]HOSTNAME[:DEST_PORT].
-func ParseProxyString(endpoint string) (*ProxyConfig, error) {
+func ParseEndpointString(endpoint string) (*ProxyConfig, error) {
+	if endpoint == "" {
+		return nil, fmt.Errorf("endpoint cannot be empty. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]")
+	}
+
 	parts := strings.Split(endpoint, ":")
 	if len(parts) == 0 || len(parts) > 3 {
 		return nil, fmt.Errorf("invalid endpoint format '%s'. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]", endpoint)
@@ -52,6 +60,10 @@ func ParseProxyString(endpoint string) (*ProxyConfig, error) {
 		}
 	}
 
+	if hostname == "" {
+		return nil, fmt.Errorf("hostname cannot be empty")
+	}
+
 	return &ProxyConfig{
 		Hostname:        hostname,
 		LocalPort:       localPort,
@@ -59,7 +71,19 @@ func ParseProxyString(endpoint string) (*ProxyConfig, error) {
 	}, nil
 }
 
-// GetAddress returns the full address of the target application.
+// Returns the full address of the target application.
 func (c *ProxyConfig) GetAddress() string {
 	return fmt.Sprintf("%s:%d", c.Hostname, c.DestinationPort)
+}
+
+// Sets the default values, if not provided, for the proxy configuration.
+func SetDefaults(proxies []ProxyConfig) {
+	for i := range proxies {
+		if proxies[i].LocalPort == 0 {
+			proxies[i].LocalPort = DefaultLocalPort
+		}
+		if proxies[i].DestinationPort == 0 {
+			proxies[i].DestinationPort = DefaultDestinationPort
+		}
+	}
 }

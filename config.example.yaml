@@ -1,0 +1,13 @@
+# Cloudflared Proxy Configuration Example
+# Viper supports multiple formats: YAML, JSON, TOML, HCL, INI, envfile, and Java properties
+# Copy this file to ~/.config/cloudflared-proxy/config.yaml and modify as needed
+
+proxies:
+    # Destination hostname to proxy (required)
+  - hostname: "example.your-domain.com"
+    # Local port to proxy (optional, defaults to 8888)
+    localPort: 8888
+    # Destination port to proxy (optional, defaults to 443)
+    destinationPort: 443
+    # Skip TLS verification (optional, defaults to false)
+    skipTLS: false

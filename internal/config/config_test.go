@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestParseProxyString(t *testing.T) {
+func TestParseEndpointString(t *testing.T) {
 	testCases := []struct {
 		name           string
 		endpoint       string
@@ -58,23 +58,23 @@ func TestParseProxyString(t *testing.T) {
 		{
 			name:        "invalid format - empty string",
 			endpoint:    "",
-			expectedErr: fmt.Errorf("invalid endpoint format ''. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]"),
+			expectedErr: fmt.Errorf("endpoint cannot be empty. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]"),
 		},
 		{
 			name:        "invalid local port",
 			endpoint:    "abc:host:123",
-			expectedErr: fmt.Errorf("invalid local port 'abc': input does not match format"),
+			expectedErr: fmt.Errorf("invalid local port 'abc'"),
 		},
 		{
 			name:        "invalid destination port",
 			endpoint:    "host:abc",
-			expectedErr: fmt.Errorf("invalid destination port 'abc': input does not match format"),
+			expectedErr: fmt.Errorf("invalid destination port 'abc'"),
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			config, err := ParseProxyString(tc.endpoint)
+			config, err := ParseEndpointString(tc.endpoint)
 
 			if tc.expectedErr != nil {
 				assert.Error(t, err)
@@ -84,6 +84,46 @@ func TestParseProxyString(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedConfig, config)
 			}
+		})
+	}
+}
+
+func TestGetAddress(t *testing.T) {
+	config := &ProxyConfig{
+		Hostname:        "app.example.com",
+		DestinationPort: 8080,
+	}
+	expected := "app.example.com:8080"
+	assert.Equal(t, expected, config.GetAddress())
+}
+
+func TestSetDefaults(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    []ProxyConfig
+		expected []ProxyConfig
+	}{
+		{
+			name:     "no defaults needed",
+			input:    []ProxyConfig{{Hostname: "host1", LocalPort: 1000, DestinationPort: 2000}},
+			expected: []ProxyConfig{{Hostname: "host1", LocalPort: 1000, DestinationPort: 2000}},
+		},
+		{
+			name:     "set both defaults",
+			input:    []ProxyConfig{{Hostname: "host1"}},
+			expected: []ProxyConfig{{Hostname: "host1", LocalPort: DefaultLocalPort, DestinationPort: DefaultDestinationPort}},
+		},
+		{
+			name:     "empty input",
+			input:    []ProxyConfig{},
+			expected: []ProxyConfig{},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			SetDefaults(tc.input)
+			assert.Equal(t, tc.expected, tc.input)
 		})
 	}
 }
