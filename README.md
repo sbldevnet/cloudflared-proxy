@@ -95,10 +95,16 @@ Or with a custom config file path:
 
 ### Configuration Precedence
 
-Configuration is loaded in the following order, with later sources overriding earlier ones:
+The tool can be configured using a configuration file or command-line flags. Please note that for defining proxy endpoints, **these methods are mutually exclusive**.
 
-1.  **Configuration File**
-3.  **Command-Line Flags**
+Configuration is loaded from the following sources:
+
+1.  **Configuration File**:
+    - By default, the tool looks for a `config.yaml` file in `$HOME/.config/cloudflared-proxy/`.
+    - A different configuration file can be specified using the `--config` or `-c` flag. If a file is specified with this flag and it is not found, the program will exit with an error.
+2.  **Command-Line Flags**:
+    - Endpoints can be specified directly using the `--endpoints` or `-e` flag.
+    - If endpoints are provided via flags, any configuration file will be ignored for endpoint definitions.
 
 ---
 
