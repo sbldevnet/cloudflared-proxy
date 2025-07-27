@@ -16,7 +16,7 @@ import (
 func Execute() *cobra.Command {
 
 	cmd := &cobra.Command{
-		Use:   "cfproxy",
+		Use:   "cloudflared-proxy",
 		Short: "A reverse proxy tool for Cloudflare Access applications.",
 	}
 

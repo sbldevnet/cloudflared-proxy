@@ -20,7 +20,7 @@ The binary can be downloaded from the [GitHub Releases](https://github.com/sblde
 Alternatively, you can build from source:
 
 ```bash
-go build -o cfproxy .
+go build -o cloudflared-proxy .
 ```
 
 ## Usage
@@ -28,7 +28,7 @@ go build -o cfproxy .
 The primary command is `run`, which starts the reverse proxies.
 
 ```bash
-./cfproxy run [flags]
+./cloudflared-proxy run [flags]
 ```
 
 ### Command-Line Flags
@@ -45,29 +45,29 @@ You can specify endpoints directly on the command line.
 
 ```bash
 # Proxy example.com to localhost:8888
-./cfproxy run -e example.com
+./cloudflared-proxy run -e example.com
 
 # Proxy example.com to localhost:9000
-./cfproxy run -e 9000:example.com
+./cloudflared-proxy run -e 9000:example.com
 
 # Proxy example.com:8443 to localhost:8888
-./cfproxy run -e example.com:8443
+./cloudflared-proxy run -e example.com:8443
 
 # Proxy example.com:8443 to localhost:9000
-./cfproxy run -e 9000:example.com:8443
+./cloudflared-proxy run -e 9000:example.com:8443
 
 # Proxy multiple endpoints
-./cfproxy run -e example1.com,9001:example2.com
+./cloudflared-proxy run -e example1.com,9001:example2.com
   # or
-./cfproxy run -e example1.com -e 9001:example2.com
+./cloudflared-proxy run -e example1.com -e 9001:example2.com
 
 # Skip TLS verification
-./cfproxy run -e example.com --skip-tls
+./cloudflared-proxy run -e example.com --skip-tls
 ```
 
 ### Configuration File
 
-For a more persistent setup, you can use a configuration file. By default, `cfproxy` looks for a `config` file in `$HOME/.config/cloudflared-proxy/`. You can specify a different file with the `--config` or `-c` flag.
+For a more persistent setup, you can use a configuration file. By default, `cloudflared-proxy` looks for a `config` file in `$HOME/.config/cloudflared-proxy/`. You can specify a different file with the `--config` or `-c` flag.
 
 **Example `config.yaml`:**
 
@@ -85,12 +85,12 @@ proxies:
 With a configuration file, you can start the proxies with a simple command:
 
 ```bash
-./cfproxy run
+./cloudflared-proxy run
 ```
 
 Or with a custom config file path:
 ```bash
-./cfproxy run -c /path/to/your/config.yaml
+./cloudflared-proxy run -c /path/to/your/config.yaml
 ```
 
 ### Configuration Precedence
