@@ -37,22 +37,19 @@ func Run() *cobra.Command {
 		Use:   "run",
 		Short: "Start reverse proxies",
 		Long:  "Start reverse proxies to Cloudflare Access applications",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return initConfig(cfgFile)
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(endpoints) == 0 && !viper.IsSet("proxies") {
-				cmd.Help()
-				return nil
-			}
+			hasEndpoints := cmd.Flags().Changed("endpoints")
+			hasConfig := cmd.Flags().Changed("config")
 
-			if len(endpoints) > 0 && viper.IsSet("proxies") {
-				return fmt.Errorf("cannot specify endpoints via flags when a config file is used")
+			// Check for conflicting flags
+			if hasConfig && hasEndpoints {
+				return fmt.Errorf("cannot specify both --config and --endpoints flags")
 			}
 
 			var proxyConfigs []config.ProxyConfig
 
-			if len(endpoints) > 0 {
+			// If endpoints provided
+			if hasEndpoints {
 				proxyConfigs = make([]config.ProxyConfig, len(endpoints))
 				for i, endpoint := range endpoints {
 					proxy, err := config.ParseEndpointString(endpoint)
@@ -63,23 +60,27 @@ func Run() *cobra.Command {
 					proxyConfigs[i] = *proxy
 				}
 			} else {
+				// If config or default provided
+				if err := initConfig(cfgFile); err != nil {
+					return err
+				}
+
+				if !viper.IsSet("proxies") {
+					return fmt.Errorf("no proxies defined in config file")
+				}
+
 				var cfg config.Config
 				if err := viper.Unmarshal(&cfg); err != nil {
 					return fmt.Errorf("unable to decode into struct, %v", err)
 				}
+				config.SetDefaults(cfg.Proxies)
 				proxyConfigs = cfg.Proxies
-				config.SetDefaults(proxyConfigs)
 			}
 
 			logger.Debug("cmd.Run", "Starting %d proxies", len(proxyConfigs))
 			logger.Debug("cmd.Run", "Proxy configs: %v", proxyConfigs)
 
-			err := internal.ProxyCFAccess(cmd.Context(), proxyConfigs, internal.NewLiveProxyService())
-			if err != nil {
-				return err
-			}
-
-			return nil
+			return internal.ProxyCFAccess(cmd.Context(), proxyConfigs, internal.NewLiveProxyService())
 		},
 	}
 
@@ -92,8 +93,12 @@ func Run() *cobra.Command {
 
 func initConfig(cfgFile string) error {
 	if cfgFile != "" {
+		// Explicit config file
+		logger.Debug("cmd.initConfig", "Explicit config file: %s", cfgFile)
 		viper.SetConfigFile(cfgFile)
 	} else {
+		// Try default config location
+		logger.Debug("cmd.initConfig", "No explicit config file, using default location")
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return err
@@ -104,18 +109,15 @@ func initConfig(cfgFile string) error {
 
 	if err := viper.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found; ignore error if not explicitly provided
 			if cfgFile != "" {
-				return err
+				return fmt.Errorf("config file not found: %s", cfgFile)
 			}
-		} else {
-			return err
+			logger.Debug("cmd.initConfig", "default config file not found")
+			return fmt.Errorf("no config file or endpoints provided")
 		}
+		return err
 	}
 
-	if cfgFile != "" {
-		logger.Debug("cmd.initConfig", "Config file path: %s", viper.ConfigFileUsed())
-	}
-
+	logger.Debug("cmd.initConfig", "Config file loaded: %s", viper.ConfigFileUsed())
 	return nil
 }
