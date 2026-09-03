@@ -14,7 +14,8 @@ func init() {
 
 	ll, err := log.ParseLevel(lvl)
 	if err != nil {
-		ll = log.DebugLevel
+		log.WithField("function", "logger.init").Warnf("invalid LOG_LEVEL %q, falling back to info", lvl)
+		ll = log.InfoLevel
 	}
 	log.SetLevel(ll)
 
