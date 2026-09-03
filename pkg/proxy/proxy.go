@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -68,9 +68,8 @@ type CFAccessProxyConfig struct {
 	SkipTLS   bool
 }
 
-// serverEntry pairs a Server with its current address, tracked separately so
-// that logging the address (from the shutdown loop) never races with the
-// retry goroutine reassigning http.Server.Addr on a random-port retry.
+// addr is tracked outside http.Server.Addr: the retry goroutine reassigns
+// that field concurrently with the shutdown loop reading it for logging.
 type serverEntry struct {
 	server Server
 	addr   atomic.Pointer[string]
@@ -150,6 +149,5 @@ func StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) er
 }
 
 var getRandomPort = func() int {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return r.Intn(randomPortRange) + randomPortStart
+	return rand.N(randomPortRange) + randomPortStart
 }
