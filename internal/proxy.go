@@ -45,8 +45,7 @@ func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig, service Pr
 
 		url, err := url.Parse(fmt.Sprintf("https://%s", config.GetAddress()))
 		if err != nil {
-			logger.Error("proxy.ProxyCFAccess", err, "Error parsing target URL for %s, skipping", config.GetAddress())
-			return err
+			return fmt.Errorf("error parsing target URL for %s: %w", config.GetAddress(), err)
 		}
 
 		proxyConfigs[i] = proxy.CFAccessProxyConfig{

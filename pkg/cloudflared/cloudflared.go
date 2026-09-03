@@ -37,7 +37,6 @@ func GetCloudflareAccessTokenForApp(url string) (string, error) {
 	logger.Debug("cloudflared.GetCloudflareAccessTokenForApp", "executing cloudflared access login command for %s", url)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			logger.Error("cloudflared.GetCloudflareAccessTokenForApp", err, "cloudflared is not installed")
 			return "", fmt.Errorf("cloudflared is not installed. Please install it first: %s", cloudflaredDocURL)
 		}
 
@@ -47,14 +46,12 @@ func GetCloudflareAccessTokenForApp(url string) (string, error) {
 			return "", ErrAccessAppNotFound
 		}
 
-		logger.Error("cloudflared.GetCloudflareAccessTokenForApp", err, "cloudflared login failed: %s", outputStr)
 		return "", fmt.Errorf("cloudflared login failed: %s", outputStr)
 	}
 
 	output, err = cmdr.CombinedOutput("cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
 	logger.Debug("cloudflared.GetCloudflareAccessTokenForApp", "executing cloudflared access token command for %s", url)
 	if err != nil {
-		logger.Error("cloudflared.GetCloudflareAccessTokenForApp", err, "cloudflared token failed: %s", string(output))
 		return "", fmt.Errorf("cloudflared token failed: %s", string(output))
 	}
 
