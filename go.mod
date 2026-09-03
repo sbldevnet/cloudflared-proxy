@@ -1,6 +1,6 @@
 module github.com/sbldevnet/cloudflared-proxy
 
-go 1.24
+go 1.27.1
 
 require (
 	github.com/sirupsen/logrus v1.10.1
