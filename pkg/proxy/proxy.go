@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -67,12 +68,29 @@ type CFAccessProxyConfig struct {
 	SkipTLS   bool
 }
 
+// serverEntry pairs a Server with its current address, tracked separately so
+// that logging the address (from the shutdown loop) never races with the
+// retry goroutine reassigning http.Server.Addr on a random-port retry.
+type serverEntry struct {
+	server Server
+	addr   atomic.Pointer[string]
+}
+
+func (e *serverEntry) setAddr(addr string) {
+	e.server.HTTPServer().Addr = addr
+	e.addr.Store(&addr)
+}
+
+func (e *serverEntry) getAddr() string {
+	return *e.addr.Load()
+}
+
 func StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) error {
 	if len(configs) == 0 {
 		return errors.New("no proxy configurations provided")
 	}
 
-	var servers []Server
+	var entries []*serverEntry
 	var wg sync.WaitGroup
 
 	for _, proxyConfig := range configs {
@@ -85,22 +103,24 @@ func StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) er
 		proxy.Transport = transport
 		proxy.Director = newDirector(proxyConfig)
 
-		server := newServer(fmt.Sprintf(":%d", proxyConfig.LocalPort), proxy)
-		servers = append(servers, server)
+		addr := fmt.Sprintf(":%d", proxyConfig.LocalPort)
+		entry := &serverEntry{server: newServer(addr, proxy)}
+		entry.addr.Store(&addr)
+		entries = append(entries, entry)
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			logger.Info("proxy.Proxy", "Starting proxy server on http://localhost:%d, forwarding to %s", proxyConfig.LocalPort, proxyConfig.Url.String())
 
-			err := server.ListenAndServe()
+			err := entry.server.ListenAndServe()
 
 			// If the error is that the port is in use, try again with a random port.
 			if err != nil && errors.Is(err, syscall.EADDRINUSE) {
 				randomPort := getRandomPort()
 				logger.Warn("proxy.Proxy", "Port %d for target %s is in use. Retrying on port %d", proxyConfig.LocalPort, proxyConfig.Url.String(), randomPort)
-				server.HTTPServer().Addr = fmt.Sprintf(":%d", randomPort)
-				err = server.ListenAndServe() // Retry
+				entry.setAddr(fmt.Sprintf(":%d", randomPort))
+				err = entry.server.ListenAndServe() // Retry
 			}
 
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -118,9 +138,9 @@ func StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) er
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	for _, s := range servers {
-		if err := s.Shutdown(shutdownCtx); err != nil {
-			logger.Error("proxy.Proxy", err, "Failed to gracefully shut down server at %s", s.HTTPServer().Addr)
+	for _, e := range entries {
+		if err := e.server.Shutdown(shutdownCtx); err != nil {
+			logger.Error("proxy.Proxy", err, "Failed to gracefully shut down server at %s", e.getAddr())
 		}
 	}
 
