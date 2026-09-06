@@ -3,6 +3,8 @@ package proxy
 import (
 	"context"
 	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,6 +16,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+var testLog = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 type MockServer struct {
 	mock.Mock
@@ -46,7 +50,7 @@ func TestNewDirector(t *testing.T) {
 		Token: "test-token",
 	}
 
-	director := newDirector(config)
+	director := newDirector(testLog, config)
 
 	// Create a sample request to test the director
 	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
@@ -68,7 +72,7 @@ func TestStartMultipleProxies(t *testing.T) {
 	})
 
 	t.Run("no proxy configs", func(t *testing.T) {
-		err := StartMultipleProxies(context.Background(), []CFAccessProxyConfig{})
+		err := StartMultipleProxies(context.Background(), testLog, []CFAccessProxyConfig{})
 		assert.EqualError(t, err, "no proxy configurations provided")
 	})
 
@@ -95,7 +99,7 @@ func TestStartMultipleProxies(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			StartMultipleProxies(ctx, configs)
+			StartMultipleProxies(ctx, testLog, configs)
 		}()
 
 		time.Sleep(100 * time.Millisecond)
@@ -125,7 +129,7 @@ func TestStartMultipleProxies(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := StartMultipleProxies(ctx, configs)
+			err := StartMultipleProxies(ctx, testLog, configs)
 			assert.NoError(t, err)
 		}()
 
@@ -158,7 +162,7 @@ func TestStartMultipleProxies(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := StartMultipleProxies(ctx, configs)
+			err := StartMultipleProxies(ctx, testLog, configs)
 			assert.NoError(t, err)
 		}()
 
@@ -189,7 +193,7 @@ func TestStartMultipleProxies(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := StartMultipleProxies(ctx, configs)
+			err := StartMultipleProxies(ctx, testLog, configs)
 			assert.NoError(t, err)
 		}()
 
