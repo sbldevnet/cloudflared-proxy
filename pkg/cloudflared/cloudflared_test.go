@@ -2,12 +2,16 @@ package cloudflared
 
 import (
 	"errors"
+	"io"
+	"log/slog"
 	"os/exec"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+var testLog = slog.New(slog.NewTextHandler(io.Discard, nil))
 
 // MockCommander is a mock for the Commander interface.
 type MockCommander struct {
@@ -53,7 +57,7 @@ func TestGetCloudflareAccessTokenForAppWithMock(t *testing.T) {
 		// Expect the token command to be called and return a mock token.
 		mockCmdr.On("CombinedOutput", "cloudflared", "access", "token", "-app=app.example.com").Return([]byte("mock-token"), nil)
 
-		token, err := GetCloudflareAccessTokenForApp("app.example.com")
+		token, err := GetCloudflareAccessTokenForApp(testLog, "app.example.com")
 
 		assert.NoError(t, err)
 		assert.Equal(t, "mock-token", token)
@@ -67,7 +71,7 @@ func TestGetCloudflareAccessTokenForAppWithMock(t *testing.T) {
 		// Expect the login command to fail with exec.ErrNotFound.
 		mockCmdr.On("CombinedOutput", "cloudflared", "access", "login", "app.example.com/not-installed").Return(nil, exec.ErrNotFound)
 
-		_, err := GetCloudflareAccessTokenForApp("app.example.com/not-installed")
+		_, err := GetCloudflareAccessTokenForApp(testLog, "app.example.com/not-installed")
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "cloudflared is not installed")
@@ -82,7 +86,7 @@ func TestGetCloudflareAccessTokenForAppWithMock(t *testing.T) {
 		errOutput := []byte(accessAppNotFoundMsg)
 		mockCmdr.On("CombinedOutput", "cloudflared", "access", "login", "app.example.com/not-found").Return(errOutput, errors.New("exit status 1"))
 
-		_, err := GetCloudflareAccessTokenForApp("app.example.com/not-found")
+		_, err := GetCloudflareAccessTokenForApp(testLog, "app.example.com/not-found")
 
 		assert.Error(t, err)
 		assert.Equal(t, ErrAccessAppNotFound, err)
@@ -96,7 +100,7 @@ func TestGetCloudflareAccessTokenForAppWithMock(t *testing.T) {
 		errOutput := []byte("some generic login error")
 		mockCmdr.On("CombinedOutput", "cloudflared", "access", "login", "app.example.com/login-fails").Return(errOutput, errors.New("exit status 1"))
 
-		_, err := GetCloudflareAccessTokenForApp("app.example.com/login-fails")
+		_, err := GetCloudflareAccessTokenForApp(testLog, "app.example.com/login-fails")
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "cloudflared login failed: some generic login error")
@@ -113,7 +117,7 @@ func TestGetCloudflareAccessTokenForAppWithMock(t *testing.T) {
 		errOutput := []byte("some generic token error")
 		mockCmdr.On("CombinedOutput", "cloudflared", "access", "token", "-app=app.example.com/token-fails").Return(errOutput, errors.New("exit status 1"))
 
-		_, err := GetCloudflareAccessTokenForApp("app.example.com/token-fails")
+		_, err := GetCloudflareAccessTokenForApp(testLog, "app.example.com/token-fails")
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "cloudflared token failed: some generic token error")

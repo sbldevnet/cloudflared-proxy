@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/sbldevnet/cloudflared-proxy/internal/config"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/proxy"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -19,22 +19,19 @@ type MockProxyService struct {
 	mock.Mock
 }
 
-func (m *MockProxyService) GetCloudflareAccessTokenForApp(url string) (string, error) {
+func (m *MockProxyService) GetCloudflareAccessTokenForApp(log *slog.Logger, url string) (string, error) {
 	args := m.Called(url)
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockProxyService) StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error {
+func (m *MockProxyService) StartMultipleProxies(ctx context.Context, log *slog.Logger, configs []proxy.CFAccessProxyConfig) error {
 	args := m.Called(ctx, configs)
 	return args.Error(0)
 }
 
 func TestProxyCFAccess(t *testing.T) {
 	var logOutput bytes.Buffer
-	log.SetOutput(&logOutput)
-	t.Cleanup(func() {
-		log.SetOutput(nil)
-	})
+	log := slog.New(slog.NewTextHandler(&logOutput, nil))
 
 	testCases := []struct {
 		name                 string
@@ -68,7 +65,7 @@ func TestProxyCFAccess(t *testing.T) {
 				service.On("GetCloudflareAccessTokenForApp", "app1.example.com:443").Return("", cloudflared.ErrAccessAppNotFound)
 				service.On("StartMultipleProxies", mock.Anything, mock.Anything).Return(nil)
 			},
-			expectedLogContains: "Access application not found at app1.example.com:443, continuing without authentication",
+			expectedLogContains: `msg="access application not found, continuing without authentication" address=app1.example.com:443`,
 		},
 		{
 			name: "Error getting token",
@@ -99,7 +96,7 @@ func TestProxyCFAccess(t *testing.T) {
 			mockService := new(MockProxyService)
 			tc.setupMocks(mockService)
 
-			err := ProxyCFAccess(context.Background(), tc.configs, mockService)
+			err := ProxyCFAccess(context.Background(), log, tc.configs, mockService)
 
 			if tc.expectedErr != nil {
 				assert.Error(t, err)

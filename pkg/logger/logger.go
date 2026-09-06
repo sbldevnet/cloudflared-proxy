@@ -1,56 +1,40 @@
 package logger
 
 import (
+	"fmt"
+	"log/slog"
 	"os"
-
-	log "github.com/sirupsen/logrus"
 )
 
-func init() {
-	lvl, ok := os.LookupEnv("LOG_LEVEL")
-	if !ok {
-		lvl = "info" // default
+// New returns a logger writing to stderr: human-readable text by default, or structured JSON
+// when LOG_FORMAT=json. Its level is controlled by LOG_LEVEL (default info); an invalid value
+// falls back to info with a warning. Each record carries a "source" attribute (file:line) of
+// its call site.
+func New() *slog.Logger {
+	level, warning := parseLevel(os.Getenv("LOG_LEVEL"))
+
+	opts := &slog.HandlerOptions{Level: level, AddSource: true}
+	var handler slog.Handler
+	if os.Getenv("LOG_FORMAT") == "json" {
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	} else {
+		handler = slog.NewTextHandler(os.Stderr, opts)
 	}
 
-	ll, err := log.ParseLevel(lvl)
-	if err != nil {
-		log.WithField("function", "logger.init").Warnf("invalid LOG_LEVEL %q, falling back to info", lvl)
-		ll = log.InfoLevel
+	log := slog.New(handler)
+	if warning != "" {
+		log.Warn(warning)
 	}
-	log.SetLevel(ll)
+	return log
+}
 
-	format, ok := os.LookupEnv("LOG_FORMAT")
-	if ok {
-		SetLoggerFormat(format)
+func parseLevel(raw string) (slog.Level, string) {
+	if raw == "" {
+		return slog.LevelInfo, ""
 	}
-}
-
-func SetLoggerFormat(logFormat string) {
-	switch logFormat {
-	case "json":
-		log.SetFormatter(&log.JSONFormatter{})
-	default:
-		log.SetFormatter(&log.TextFormatter{})
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(raw)); err != nil {
+		return slog.LevelInfo, fmt.Sprintf("invalid LOG_LEVEL %q, falling back to info", raw)
 	}
-}
-
-// Wrap logrus with function name
-func Trace(funcName, format string, args ...any) {
-	log.WithField("function", funcName).Tracef(format, args...)
-}
-
-func Debug(funcName, format string, args ...any) {
-	log.WithField("function", funcName).Debugf(format, args...)
-}
-
-func Info(funcName, format string, args ...any) {
-	log.WithField("function", funcName).Infof(format, args...)
-}
-
-func Warn(funcName, format string, args ...any) {
-	log.WithField("function", funcName).Warnf(format, args...)
-}
-
-func Error(funcName string, err error, format string, args ...any) {
-	log.WithField("function", funcName).WithError(err).Errorf(format, args...)
+	return level, ""
 }

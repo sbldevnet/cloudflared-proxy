@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -48,6 +49,8 @@ func Run() *cobra.Command {
 
 			var proxyConfigs []config.ProxyConfig
 
+			log := logger.New()
+
 			// If endpoints provided
 			if hasEndpoints {
 				proxyConfigs = make([]config.ProxyConfig, len(endpoints))
@@ -61,7 +64,7 @@ func Run() *cobra.Command {
 				}
 			} else {
 				// If config or default provided
-				if err := initConfig(cfgFile); err != nil {
+				if err := initConfig(log, cfgFile); err != nil {
 					return err
 				}
 
@@ -77,10 +80,10 @@ func Run() *cobra.Command {
 				proxyConfigs = cfg.Proxies
 			}
 
-			logger.Debug("cmd.Run", "Starting %d proxies", len(proxyConfigs))
-			logger.Debug("cmd.Run", "Proxy configs: %v", proxyConfigs)
+			log.Debug("starting proxies", "count", len(proxyConfigs))
+			log.Debug("proxy configs", "configs", proxyConfigs)
 
-			return internal.ProxyCFAccess(cmd.Context(), proxyConfigs, internal.NewLiveProxyService())
+			return internal.ProxyCFAccess(cmd.Context(), log, proxyConfigs, internal.NewLiveProxyService())
 		},
 	}
 
@@ -91,14 +94,14 @@ func Run() *cobra.Command {
 	return cmd
 }
 
-func initConfig(cfgFile string) error {
+func initConfig(log *slog.Logger, cfgFile string) error {
 	if cfgFile != "" {
 		// Explicit config file
-		logger.Debug("cmd.initConfig", "Explicit config file: %s", cfgFile)
+		log.Debug("using explicit config file", "path", cfgFile)
 		viper.SetConfigFile(cfgFile)
 	} else {
 		// Try default config location
-		logger.Debug("cmd.initConfig", "No explicit config file, using default location")
+		log.Debug("no explicit config file, using default location")
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return err
@@ -112,12 +115,12 @@ func initConfig(cfgFile string) error {
 			if cfgFile != "" {
 				return fmt.Errorf("config file not found: %s", cfgFile)
 			}
-			logger.Debug("cmd.initConfig", "default config file not found")
+			log.Debug("default config file not found")
 			return fmt.Errorf("no config file or endpoints provided")
 		}
 		return err
 	}
 
-	logger.Debug("cmd.initConfig", "Config file loaded: %s", viper.ConfigFileUsed())
+	log.Debug("config file loaded", "path", viper.ConfigFileUsed())
 	return nil
 }
