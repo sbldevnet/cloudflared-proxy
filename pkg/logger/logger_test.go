@@ -23,6 +23,17 @@ func TestNew_DefaultFormatIsText(t *testing.T) {
 	}
 }
 
+func TestNew_IncludesSource(t *testing.T) {
+	out := captureStderr(t, func() {
+		log := New()
+		log.Info("hello")
+	})
+
+	if !strings.Contains(out, "source=") || !strings.Contains(out, "logger_test.go") {
+		t.Errorf("expected a source=.../logger_test.go:NN attribute, got: %s", out)
+	}
+}
+
 func TestNew_JSONFormat(t *testing.T) {
 	t.Setenv("LOG_FORMAT", "json")
 
