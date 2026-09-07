@@ -3,7 +3,7 @@ module github.com/sbldevnet/cloudflared-proxy
 go 1.27.1
 
 require (
-	github.com/sirupsen/logrus v1.10.1
+	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.12.1
