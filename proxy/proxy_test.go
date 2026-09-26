@@ -75,6 +75,19 @@ func serveUntilListening(t *testing.T, r *Runner, configs []accessProxyConfig, l
 	}
 }
 
+// serveWithTimeout runs r.serve with a context that is never cancelled by the
+// test, so serve can only return on its own or fail the test by timing out.
+func serveWithTimeout(t *testing.T, r *Runner, configs []accessProxyConfig) error {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := r.serve(ctx, configs)
+	require.NoError(t, ctx.Err(), "serve did not return before the timeout")
+	return err
+}
+
 // addrRecordingServer records the address of each ListenAndServe call and
 // reports the port as in use on the first one.
 type addrRecordingServer struct {
@@ -118,6 +131,17 @@ func TestNewDirector(t *testing.T) {
 	assert.Equal(t, "https://app.example.com/", req.URL.String())
 	assert.Equal(t, "app.example.com", req.Host)
 	assert.Equal(t, "test-token", req.Header.Get("cf-access-token"))
+}
+
+func TestNewDirectorReplacesClientAccessToken(t *testing.T) {
+	targetURL, _ := url.Parse("https://app.example.com")
+	director := newDirector(slog.New(slog.DiscardHandler), accessProxyConfig{url: targetURL, token: "proxy-token"})
+
+	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
+	req.Header.Set("cf-access-token", "client-token")
+	director(req)
+
+	assert.Equal(t, []string{"proxy-token"}, req.Header.Values("cf-access-token"))
 }
 
 func TestNewDirectorDoesNotLogSecrets(t *testing.T) {
@@ -234,11 +258,56 @@ func TestRunnerServe(t *testing.T) {
 
 		genericError := errors.New("a generic error")
 		mockSrvr.On("ListenAndServe").Return(genericError).Once()
-		mockSrvr.On("Shutdown", mock.Anything).Return(nil).Once()
 
-		assert.NoError(t, serveUntilListening(t, r, configs, listening, 1))
+		err := serveWithTimeout(t, r, configs)
 
+		assert.ErrorIs(t, err, genericError)
 		mockSrvr.AssertExpectations(t)
+	})
+
+	t.Run("every proxy fails to start", func(t *testing.T) {
+		listening := make(chan struct{}, 4)
+		r.newServer = func(addr string, handler http.Handler) server {
+			m := &MockServer{listening: listening}
+			m.On("ListenAndServe").Return(syscall.EADDRINUSE)
+			m.On("HTTPServer").Return(&http.Server{Addr: addr})
+			return m
+		}
+		getRandomPort = func() int { return 9090 }
+
+		u, _ := url.Parse("https://app.example.com")
+		configs := []accessProxyConfig{
+			{url: u, localPort: 8080, listen: "127.0.0.1"},
+			{url: u, localPort: 8081, listen: "127.0.0.1"},
+		}
+
+		err := serveWithTimeout(t, r, configs)
+
+		assert.ErrorIs(t, err, syscall.EADDRINUSE)
+	})
+
+	t.Run("one proxy fails while another keeps running", func(t *testing.T) {
+		listening := make(chan struct{}, 2)
+		var count int
+		r.newServer = func(addr string, handler http.Handler) server {
+			count++
+			m := &MockServer{listening: listening}
+			if count == 1 {
+				m.On("ListenAndServe").Return(errors.New("bind failed"))
+			} else {
+				m.On("ListenAndServe").Return(http.ErrServerClosed)
+			}
+			m.On("Shutdown", mock.Anything).Return(nil).Maybe()
+			return m
+		}
+
+		u, _ := url.Parse("https://app.example.com")
+		configs := []accessProxyConfig{
+			{url: u, localPort: 8080, listen: "127.0.0.1"},
+			{url: u, localPort: 8081, listen: "127.0.0.1"},
+		}
+
+		assert.NoError(t, serveUntilListening(t, r, configs, listening, 2))
 	})
 
 	t.Run("retry keeps the listen host", func(t *testing.T) {
