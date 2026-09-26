@@ -19,7 +19,7 @@ type MockProxyService struct {
 	mock.Mock
 }
 
-func (m *MockProxyService) GetCloudflareAccessTokenForApp(url string) (string, error) {
+func (m *MockProxyService) CloudflareAccessTokenForApp(url string) (string, error) {
 	args := m.Called(url)
 	return args.String(0), args.Error(1)
 }
@@ -50,7 +50,7 @@ func TestProxyCFAccess(t *testing.T) {
 				{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080},
 			},
 			setupMocks: func(service *MockProxyService) {
-				service.On("GetCloudflareAccessTokenForApp", "app1.example.com:443").Return("token123", nil)
+				service.On("CloudflareAccessTokenForApp", "app1.example.com:443").Return("token123", nil)
 				service.On("StartMultipleProxies", mock.Anything, mock.AnythingOfType("[]proxy.CFAccessProxyConfig")).Return(nil).Run(func(args mock.Arguments) {
 					configs := args.Get(1).([]proxy.CFAccessProxyConfig)
 					assert.Len(t, configs, 1)
@@ -65,7 +65,7 @@ func TestProxyCFAccess(t *testing.T) {
 				{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080},
 			},
 			setupMocks: func(service *MockProxyService) {
-				service.On("GetCloudflareAccessTokenForApp", "app1.example.com:443").Return("", cloudflared.ErrAccessAppNotFound)
+				service.On("CloudflareAccessTokenForApp", "app1.example.com:443").Return("", cloudflared.ErrAccessAppNotFound)
 				service.On("StartMultipleProxies", mock.Anything, mock.Anything).Return(nil)
 			},
 			expectedLogContains: "Access application not found at app1.example.com:443, continuing without authentication",
@@ -76,7 +76,7 @@ func TestProxyCFAccess(t *testing.T) {
 				{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080},
 			},
 			setupMocks: func(service *MockProxyService) {
-				service.On("GetCloudflareAccessTokenForApp", "app1.example.com:443").Return("", errors.New("some-cf-error"))
+				service.On("CloudflareAccessTokenForApp", "app1.example.com:443").Return("", errors.New("some-cf-error"))
 			},
 			expectedErr: errors.New("some-cf-error"),
 		},
@@ -86,7 +86,7 @@ func TestProxyCFAccess(t *testing.T) {
 				{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080},
 			},
 			setupMocks: func(service *MockProxyService) {
-				service.On("GetCloudflareAccessTokenForApp", "app1.example.com:443").Return("token123", nil)
+				service.On("CloudflareAccessTokenForApp", "app1.example.com:443").Return("token123", nil)
 				service.On("StartMultipleProxies", mock.Anything, mock.Anything).Return(errors.New("proxy-start-error"))
 			},
 			expectedErr: errors.New("proxy-start-error"),
