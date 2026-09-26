@@ -107,7 +107,7 @@ func Run() *cobra.Command {
 
 	cmd.Flags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/cloudflared-proxy/config.yaml)")
 	cmd.Flags().StringSliceVarP(&endpoints, "endpoints", "e", []string{}, "List of endpoints to proxy in format [LOCAL_PORT:]HOSTNAME[:DEST_PORT]")
-	cmd.Flags().BoolVarP(&skipTLS, "skip-tls", "s", false, "Skip TLS verification for every proxy, overriding the config file (--skip-tls=false forces verification on)")
+	cmd.Flags().BoolVarP(&skipTLS, "skip-tls", "s", false, "Skip TLS verification for every proxy")
 
 	cmd.Flags().StringVar(&listenAddr, "listen", "", "IP address to listen on for every proxy, overriding the config file (default 127.0.0.1)")
 

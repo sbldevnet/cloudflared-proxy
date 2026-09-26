@@ -125,11 +125,7 @@ Configuration priority:
 
 ### Skipping TLS verification
 
-`--skip-tls` works in both modes. When the flag is set explicitly, its value applies to every proxy and takes precedence over the per-proxy `skipTLS` key of the config file, so `--skip-tls=false` forces verification on. When the flag is not set, each proxy uses its own `skipTLS` (false for `--endpoints`). A warning is logged at startup for every proxy that does not verify its target's certificate.
-
-```bash
-./cloudflared-proxy run -c /path/to/config.yaml --skip-tls
-```
+`--skip-tls` skips certificate verification for every proxy, in both `--endpoints` and config-file mode, and takes precedence over the per-proxy `skipTLS` key. A warning is logged for each proxy that skips verification.
 
 ### Exposing the proxy
 
