@@ -54,7 +54,7 @@ func newDirector(log *slog.Logger, config accessProxyConfig) func(*http.Request)
 		req.Host = config.url.Host
 		req.Header.Add("cf-access-token", config.token)
 
-		log.Debug("proxying request", "local_port", config.localPort, "method", req.Method, "url", req.URL.String())
+		log.Debug("proxying request", "local_port", config.localPort, "method", req.Method, "path", req.URL.Path)
 	}
 }
 
