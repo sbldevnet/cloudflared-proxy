@@ -156,3 +156,9 @@ func TestWithTokenFetcher(t *testing.T) {
 	assert.Equal(t, "t", token)
 	assert.True(t, called)
 }
+
+func TestWithTokenFetcherNil(t *testing.T) {
+	r := New(WithTokenFetcher(nil))
+
+	assert.NotNil(t, r.tokenFetcher)
+}

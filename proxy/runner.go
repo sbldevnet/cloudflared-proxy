@@ -22,13 +22,16 @@ type Runner struct {
 type Option func(*Runner)
 
 // WithTokenFetcher replaces how Cloudflare Access tokens are obtained.
+// A nil f is ignored and the default fetcher is kept.
 //
 // A fetcher receives the context of Run and the target address (host:port), and
 // returns its token. It should abort when the context is cancelled. It must return cloudflared.ErrAccessAppNotFound to mean "no Access application
 // exists at this address": the Runner then continues without a token.
 func WithTokenFetcher(f func(ctx context.Context, url string) (string, error)) Option {
 	return func(r *Runner) {
-		r.tokenFetcher = f
+		if f != nil {
+			r.tokenFetcher = f
+		}
 	}
 }
 
