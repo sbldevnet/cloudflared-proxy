@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"log/slog"
@@ -57,6 +58,23 @@ func TestNewDirector(t *testing.T) {
 	assert.Equal(t, "https://app.example.com/", req.URL.String())
 	assert.Equal(t, "app.example.com", req.Host)
 	assert.Equal(t, "test-token", req.Header.Get("cf-access-token"))
+}
+
+func TestNewDirectorDoesNotLogHeaderValues(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	targetURL, _ := url.Parse("https://app.example.com")
+	director := newDirector(log, accessProxyConfig{url: targetURL, token: "secret-cf-token", localPort: 8080})
+
+	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
+	req.Header.Set("Authorization", "Bearer secret-bearer")
+	req.Header.Set("Cookie", "session=secret-cookie")
+	director(req)
+
+	assert.NotEmpty(t, buf.String())
+	for _, secret := range []string{"secret-cf-token", "secret-bearer", "secret-cookie"} {
+		assert.NotContains(t, buf.String(), secret)
+	}
 }
 
 func TestRunnerServe(t *testing.T) {
