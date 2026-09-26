@@ -125,26 +125,11 @@ Configuration priority:
 
 ### Exposing the proxy
 
-By default every proxy listens on `127.0.0.1`, so only your machine can reach it. The proxy adds your Cloudflare Access token to every request it forwards, so anyone who can reach the port can use your Access session without authenticating. Only expose it on networks you trust.
+By default every proxy listens on `127.0.0.1`. The proxy adds your Cloudflare Access token to every request it forwards, so only expose it on networks you trust.
 
-To listen on another address, use the `--listen ADDR` flag or the `listen` config key. The value must be an IP address literal (IPv4 or IPv6) without a port; hostnames, including `localhost`, are rejected. Precedence, highest first:
+To listen on another address, use `--listen ADDR` or the `listen` config key (an IP address, not a hostname). The flag overrides the config file, and a per-proxy `listen` overrides the top-level one.
 
-1. `--listen` flag (applies to every proxy, in both `--endpoints` and config-file mode)
-2. Per-proxy `listen` in the config file
-3. Top-level `listen` in the config file
-4. `127.0.0.1`
-
-A `WARN` is logged for every proxy that listens on a non-loopback address.
-
-On loopback, any local user or process can use the proxy, and therefore your Access token, not only the person running it. On a shared or untrusted network, a firewall or an authenticating reverse proxy in front of the proxy is the real control.
-
-**Containers reaching a proxy on the host.** On Rancher Desktop (Lima), a container reached a proxy bound to `127.0.0.1` through `host.docker.internal`, and also one bound to `0.0.0.0`, so `listen: 0.0.0.0` was not needed there. This may not hold for other setups. On Linux with native Docker, the host is reached through the bridge gateway, so `listen` may have to be an address on that bridge, or `0.0.0.0`.
-
-Binding a Docker bridge address exposes the proxy to every container on that network and to anything else that can reach the bridge, not to a single container. The bridge address only exists while Docker is running, so the proxy fails to start without it.
-
-**Proxy inside a container.** If you publish its port with `-p PORT:PORT`, Docker publishes it on all host interfaces regardless of `listen`. Use `-p 127.0.0.1:PORT:PORT` to keep it local.
-
-`localhost` clients that resolve to `::1` first fall back to `127.0.0.1` (for example `curl` and Go clients); if yours does not, use `127.0.0.1` explicitly or set `--listen ::1`.
+If a client cannot connect through `localhost` (it only tries `::1`), use `127.0.0.1` instead.
 
 ## Use as a library
 
