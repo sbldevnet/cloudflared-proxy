@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"log/slog"
 	"math/rand/v2"
 	"net"
@@ -55,7 +56,7 @@ func newDirector(log *slog.Logger, config accessProxyConfig) func(*http.Request)
 		req.URL.Scheme = config.url.Scheme
 		req.URL.Host = config.url.Host
 		req.Host = config.url.Host
-		req.Header.Add("cf-access-token", config.token)
+		req.Header.Set("cf-access-token", config.token)
 
 		log.Debug("proxying request", "local_port", config.localPort, "method", req.Method, "path", req.URL.Path)
 	}
@@ -92,6 +93,10 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 
 	var entries []*serverEntry
 	var wg sync.WaitGroup
+
+	var mu sync.Mutex
+	var startErrs []error
+	allFailed := make(chan struct{})
 
 	for _, proxyConfig := range configs {
 
@@ -131,6 +136,12 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
 				r.log.Error("proxy failed to start", "target", proxyConfig.url.String(), "error", err)
+				mu.Lock()
+				startErrs = append(startErrs, fmt.Errorf("proxy for %s failed to start: %w", proxyConfig.url, err))
+				if len(startErrs) == len(configs) {
+					close(allFailed)
+				}
+				mu.Unlock()
 			}
 		}()
 	}
@@ -138,7 +149,12 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 	r.log.Info("press CTRL+C to stop")
 
 	// Wait for shutdown signal
-	<-ctx.Done()
+	select {
+	case <-allFailed:
+		wg.Wait()
+		return errors.Join(startErrs...)
+	case <-ctx.Done():
+	}
 	r.log.Info("shutdown signal received, shutting down servers")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
