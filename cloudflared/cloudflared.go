@@ -11,8 +11,7 @@ import (
 	"sync"
 )
 
-// Commander executes commands and returns their combined output, optionally
-// forwarding stderr live.
+// Commander runs external commands.
 type Commander interface {
 	CombinedOutput(ctx context.Context, name string, arg ...string) ([]byte, error)
 	// StreamStderr behaves like CombinedOutput but also forwards the command's
