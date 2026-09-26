@@ -2,11 +2,11 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
 	"github.com/sbldevnet/cloudflared-proxy/config"
-	"github.com/sbldevnet/cloudflared-proxy/logger"
 	"github.com/sbldevnet/cloudflared-proxy/proxy"
 
 	"github.com/spf13/cobra"
@@ -38,6 +38,7 @@ func Run() *cobra.Command {
 		Short: "Start reverse proxies",
 		Long:  "Start reverse proxies to Cloudflare Access applications",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			log := newLogger()
 			hasEndpoints := cmd.Flags().Changed("endpoints")
 			hasConfig := cmd.Flags().Changed("config")
 
@@ -61,9 +62,10 @@ func Run() *cobra.Command {
 				}
 			} else {
 				// If config or default provided
-				if err := initConfig(cfgFile); err != nil {
+				if err := initConfig(log, cfgFile); err != nil {
 					return err
 				}
+				log.Debug("config file loaded", "path", viper.ConfigFileUsed())
 
 				if !viper.IsSet("proxies") {
 					return fmt.Errorf("no proxies defined in config file")
@@ -77,10 +79,9 @@ func Run() *cobra.Command {
 				proxyConfigs = cfg.Proxies
 			}
 
-			logger.Debug("cmd.Run", "Starting %d proxies", len(proxyConfigs))
-			logger.Debug("cmd.Run", "Proxy configs: %v", proxyConfigs)
+			log.Debug("starting proxies", "count", len(proxyConfigs), "configs", proxyConfigs)
 
-			return proxy.New().Run(cmd.Context(), proxyConfigs)
+			return proxy.New(proxy.WithLogger(log)).Run(cmd.Context(), proxyConfigs)
 		},
 	}
 
@@ -91,19 +92,19 @@ func Run() *cobra.Command {
 	return cmd
 }
 
-func initConfig(cfgFile string) error {
+func initConfig(log *slog.Logger, cfgFile string) error {
+	var dir string
 	if cfgFile != "" {
-		// Explicit config file
-		logger.Debug("cmd.initConfig", "Explicit config file: %s", cfgFile)
+		log.Debug("using explicit config file", "path", cfgFile)
 		viper.SetConfigFile(cfgFile)
 	} else {
-		// Try default config location
-		logger.Debug("cmd.initConfig", "No explicit config file, using default location")
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return err
 		}
-		viper.AddConfigPath(filepath.Join(home, ".config", "cloudflared-proxy"))
+		dir = filepath.Join(home, ".config", "cloudflared-proxy")
+		log.Debug("using default config location", "path", dir)
+		viper.AddConfigPath(dir)
 		viper.SetConfigName("config")
 	}
 
@@ -112,12 +113,11 @@ func initConfig(cfgFile string) error {
 			if cfgFile != "" {
 				return fmt.Errorf("config file not found: %s", cfgFile)
 			}
-			logger.Debug("cmd.initConfig", "default config file not found")
+			log.Debug("default config file not found", "path", dir)
 			return fmt.Errorf("no config file or endpoints provided")
 		}
 		return err
 	}
 
-	logger.Debug("cmd.initConfig", "Config file loaded: %s", viper.ConfigFileUsed())
 	return nil
 }

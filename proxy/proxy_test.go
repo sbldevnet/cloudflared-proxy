@@ -1,8 +1,10 @@
 package proxy
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -46,7 +48,7 @@ func TestNewDirector(t *testing.T) {
 		token: "test-token",
 	}
 
-	director := newDirector(config)
+	director := newDirector(slog.New(slog.DiscardHandler), config)
 
 	// Create a sample request to test the director
 	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
@@ -58,6 +60,24 @@ func TestNewDirector(t *testing.T) {
 	assert.Equal(t, "test-token", req.Header.Get("cf-access-token"))
 }
 
+func TestNewDirectorDoesNotLogSecrets(t *testing.T) {
+	var buf bytes.Buffer
+	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	targetURL, _ := url.Parse("https://app.example.com")
+	director := newDirector(log, accessProxyConfig{url: targetURL, token: "secret-cf-token", localPort: 8080})
+
+	req := httptest.NewRequest("GET", "http://localhost:8080/api?token=secret-query", nil)
+	req.Header.Set("Authorization", "Bearer secret-bearer")
+	req.Header.Set("Cookie", "session=secret-cookie")
+	director(req)
+
+	assert.NotEmpty(t, buf.String())
+	for _, secret := range []string{"secret-cf-token", "secret-bearer", "secret-cookie", "secret-query"} {
+		assert.NotContains(t, buf.String(), secret)
+	}
+	assert.Contains(t, buf.String(), "path=/api")
+}
+
 func TestRunnerServe(t *testing.T) {
 	// Backup and restore original functions
 	originalGetRandomPort := getRandomPort
@@ -65,7 +85,7 @@ func TestRunnerServe(t *testing.T) {
 		getRandomPort = originalGetRandomPort
 	})
 
-	r := &Runner{}
+	r := New(WithLogger(slog.New(slog.DiscardHandler)))
 
 	t.Run("no proxy configs", func(t *testing.T) {
 		err := r.serve(context.Background(), []accessProxyConfig{})

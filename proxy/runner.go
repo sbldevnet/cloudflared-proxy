@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 
 	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
-	"github.com/sbldevnet/cloudflared-proxy/logger"
 )
 
 // Runner starts reverse proxies to Cloudflare Access applications.
@@ -18,16 +18,27 @@ type Runner struct {
 	// no Access application; Run then continues without a token.
 	tokenFetcher func(ctx context.Context, url string) (string, error)
 	newServer    func(addr string, handler http.Handler) server
+	log          *slog.Logger
 }
 
 // Option configures a Runner.
 type Option func(*Runner)
+
+// WithLogger sets the logger used by the Runner. A nil logger is ignored.
+func WithLogger(l *slog.Logger) Option {
+	return func(r *Runner) {
+		if l != nil {
+			r.log = l
+		}
+	}
+}
 
 // New returns a ready-to-use Runner; by default it uses the real cloudflared binary.
 func New(opts ...Option) *Runner {
 	r := &Runner{
 		tokenFetcher: cloudflared.CloudflareAccessTokenForApp,
 		newServer:    newHTTPServer,
+		log:          slog.Default(),
 	}
 	for _, opt := range opts {
 		opt(r)
@@ -40,6 +51,7 @@ func New(opts ...Option) *Runner {
 func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 	proxyConfigs := make([]accessProxyConfig, len(configs))
 	for i, cfg := range configs {
+		r.log.Debug("fetching Access token", "address", cfg.Address())
 		token, err := r.tokenFetcher(ctx, cfg.Address())
 		if err != nil {
 			if !errors.Is(err, cloudflared.ErrAccessAppNotFound) {
@@ -48,7 +60,7 @@ func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 				}
 				return fmt.Errorf("fetching Access token for %s: %w", cfg.Address(), err)
 			}
-			logger.Warn("proxy.Runner", "Access application not found at %s, continuing without authentication", cfg.Address())
+			r.log.Warn("Access application not found, continuing without authentication", "address", cfg.Address())
 		}
 
 		target, err := url.Parse(fmt.Sprintf("https://%s", cfg.Address()))

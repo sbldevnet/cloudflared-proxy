@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"net/http/httputil"
@@ -13,8 +14,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-
-	"github.com/sbldevnet/cloudflared-proxy/logger"
 )
 
 // server defines the behavior of a server that can be started and shut down.
@@ -48,15 +47,14 @@ const (
 	randomPortStart = 8000
 )
 
-func newDirector(config accessProxyConfig) func(*http.Request) {
+func newDirector(log *slog.Logger, config accessProxyConfig) func(*http.Request) {
 	return func(req *http.Request) {
 		req.URL.Scheme = config.url.Scheme
 		req.URL.Host = config.url.Host
 		req.Host = config.url.Host
 		req.Header.Add("cf-access-token", config.token)
 
-		// Debug requests through the proxy
-		logger.Debug("proxy.Proxy", "Request to localhost:%d, URL: %s, Headers: %v", config.localPort, req.URL, req.Header)
+		log.Debug("proxying request", "local_port", config.localPort, "method", req.Method, "path", req.URL.Path)
 	}
 }
 
@@ -99,7 +97,7 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 
 		proxy := httputil.NewSingleHostReverseProxy(proxyConfig.url)
 		proxy.Transport = transport
-		proxy.Director = newDirector(proxyConfig)
+		proxy.Director = newDirector(r.log, proxyConfig)
 
 		addr := fmt.Sprintf(":%d", proxyConfig.localPort)
 		entry := &serverEntry{server: r.newServer(addr, proxy)}
@@ -109,41 +107,41 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			logger.Info("proxy.Proxy", "Starting proxy server on http://localhost:%d, forwarding to %s", proxyConfig.localPort, proxyConfig.url.String())
+			r.log.Info("starting proxy server", "local_port", proxyConfig.localPort, "target", proxyConfig.url.String())
 
 			err := entry.server.ListenAndServe()
 
 			// If the error is that the port is in use, try again with a random port.
 			if err != nil && errors.Is(err, syscall.EADDRINUSE) {
 				randomPort := getRandomPort()
-				logger.Warn("proxy.Proxy", "Port %d for target %s is in use. Retrying on port %d", proxyConfig.localPort, proxyConfig.url.String(), randomPort)
+				r.log.Warn("port in use, retrying on random port", "local_port", proxyConfig.localPort, "target", proxyConfig.url.String(), "retry_port", randomPort)
 				entry.setAddr(fmt.Sprintf(":%d", randomPort))
 				err = entry.server.ListenAndServe() // Retry
 			}
 
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Error("proxy.Proxy", err, "Proxy for %s failed to start", proxyConfig.url.String())
+				r.log.Error("proxy failed to start", "target", proxyConfig.url.String(), "error", err)
 			}
 		}()
 	}
 
-	logger.Info("proxy.Proxy", "Press CTRL+C to stop.")
+	r.log.Info("press CTRL+C to stop")
 
 	// Wait for shutdown signal
 	<-ctx.Done()
-	logger.Info("proxy.Proxy", "Shutdown signal received, gracefully shutting down servers...")
+	r.log.Info("shutdown signal received, shutting down servers")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	for _, e := range entries {
 		if err := e.server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("proxy.Proxy", err, "Failed to gracefully shut down server at %s", e.getAddr())
+			r.log.Error("graceful shutdown failed", "addr", e.getAddr(), "error", err)
 		}
 	}
 
 	wg.Wait()
-	logger.Info("proxy.Proxy", "All proxies have been shut down.")
+	r.log.Info("all proxies shut down")
 	return nil
 }
 

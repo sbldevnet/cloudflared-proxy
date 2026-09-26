@@ -1,20 +1,20 @@
 package proxy
 
 import (
-	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -36,6 +36,48 @@ func (s *stubServer) Shutdown(context.Context) error {
 
 func (s *stubServer) HTTPServer() *http.Server { return &s.Server }
 
+// recordingHandler is a slog.Handler that stores the records it receives.
+type recordingHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (h *recordingHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *recordingHandler) Handle(_ context.Context, r slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, r)
+	return nil
+}
+
+func (h *recordingHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
+func (h *recordingHandler) WithGroup(string) slog.Handler      { return h }
+
+func (h *recordingHandler) reset() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = nil
+}
+
+// find returns the first record with the given message and its attributes by key.
+func (h *recordingHandler) find(msg string) (map[string]any, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, r := range h.records {
+		if r.Message != msg {
+			continue
+		}
+		attrs := map[string]any{"level": r.Level}
+		r.Attrs(func(a slog.Attr) bool {
+			attrs[a.Key] = a.Value.Any()
+			return true
+		})
+		return attrs, true
+	}
+	return nil, false
+}
+
 // runWithCancelledContext runs r with an already-cancelled context so Run
 // returns as soon as the servers have been created and shut down.
 func runWithCancelledContext(r *Runner, configs []config.ProxyConfig) error {
@@ -47,9 +89,7 @@ func runWithCancelledContext(r *Runner, configs []config.ProxyConfig) error {
 var errFetch = errors.New("some-cf-error")
 
 func TestRunnerRun(t *testing.T) {
-	var logOutput bytes.Buffer
-	log.SetOutput(&logOutput)
-	t.Cleanup(func() { log.SetOutput(nil) })
+	logs := &recordingHandler{}
 
 	cfgs := []config.ProxyConfig{
 		{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080},
@@ -58,7 +98,7 @@ func TestRunnerRun(t *testing.T) {
 	newRunner := func(fetch func(context.Context, string) (string, error)) (*Runner, *[]string, *[]http.Handler) {
 		var addrs []string
 		var handlers []http.Handler
-		r := New()
+		r := New(WithLogger(slog.New(logs)))
 		r.tokenFetcher = fetch
 		r.newServer = func(addr string, handler http.Handler) server {
 			addrs = append(addrs, addr)
@@ -101,7 +141,7 @@ func TestRunnerRun(t *testing.T) {
 	})
 
 	t.Run("access app not found continues without token", func(t *testing.T) {
-		logOutput.Reset()
+		logs.reset()
 		r, addrs, _ := newRunner(func(context.Context, string) (string, error) {
 			return "", cloudflared.ErrAccessAppNotFound
 		})
@@ -109,7 +149,10 @@ func TestRunnerRun(t *testing.T) {
 		require.NoError(t, runWithCancelledContext(r, cfgs))
 
 		assert.Equal(t, []string{":8080"}, *addrs)
-		assert.Contains(t, logOutput.String(), "Access application not found at app1.example.com:443, continuing without authentication")
+		attrs, ok := logs.find("Access application not found, continuing without authentication")
+		require.True(t, ok, "warning not logged")
+		assert.Equal(t, slog.LevelWarn, attrs["level"])
+		assert.Equal(t, "app1.example.com:443", attrs["address"])
 	})
 
 	t.Run("token error aborts before starting servers", func(t *testing.T) {
