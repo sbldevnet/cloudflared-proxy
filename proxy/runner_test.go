@@ -44,6 +44,8 @@ func runWithCancelledContext(r *Runner, configs []config.ProxyConfig) error {
 	return r.Run(ctx, configs)
 }
 
+var errFetch = errors.New("some-cf-error")
+
 func TestRunnerRun(t *testing.T) {
 	var logOutput bytes.Buffer
 	log.SetOutput(&logOutput)
@@ -111,12 +113,13 @@ func TestRunnerRun(t *testing.T) {
 
 	t.Run("token error aborts before starting servers", func(t *testing.T) {
 		r, addrs, _ := newRunner(func(context.Context, string) (string, error) {
-			return "", errors.New("some-cf-error")
+			return "", errFetch
 		})
 
 		err := r.Run(context.Background(), cfgs)
 
-		assert.EqualError(t, err, "some-cf-error")
+		assert.ErrorContains(t, err, "app1.example.com:443")
+		assert.ErrorIs(t, err, errFetch)
 		assert.Empty(t, *addrs)
 	})
 

@@ -56,9 +56,9 @@ func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 		if err != nil {
 			if !errors.Is(err, cloudflared.ErrAccessAppNotFound) {
 				if ctxErr := ctx.Err(); ctxErr != nil {
-					return fmt.Errorf("fetching Access token for %s: %w", cfg.Address(), ctxErr)
+					err = ctxErr
 				}
-				return err
+				return fmt.Errorf("fetching Access token for %s: %w", cfg.Address(), err)
 			}
 			logger.Warn("proxy.Runner", "Access application not found at %s, continuing without authentication", cfg.Address())
 		}
