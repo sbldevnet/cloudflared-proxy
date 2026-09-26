@@ -15,6 +15,7 @@ proxies:
     # Destination port to proxy (optional, defaults to 443)
     destinationPort: 443
     # Skip TLS verification (optional, defaults to false)
+    # The --skip-tls flag, when set, overrides this value for every proxy.
     skipTLS: false
     # IP address to listen on for this proxy (optional, overrides the top-level "listen")
     # listen: 127.0.0.1

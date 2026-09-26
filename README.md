@@ -123,6 +123,14 @@ Configuration priority:
    - If not found, the program will display help information
    - Example: `./cloudflared-proxy run`
 
+### Skipping TLS verification
+
+`--skip-tls` works in both modes. When the flag is set explicitly, its value applies to every proxy and takes precedence over the per-proxy `skipTLS` key of the config file, so `--skip-tls=false` forces verification on. When the flag is not set, each proxy uses its own `skipTLS` (false for `--endpoints`). A warning is logged at startup for every proxy that does not verify its target's certificate.
+
+```bash
+./cloudflared-proxy run -c /path/to/config.yaml --skip-tls
+```
+
 ### Exposing the proxy
 
 By default every proxy listens on `127.0.0.1`. The proxy adds your Cloudflare Access token to every request it forwards, so only expose it on networks you trust.
