@@ -7,6 +7,11 @@
 # literal, not a hostname. The --listen flag overrides this and any per-proxy value.
 # listen: 127.0.0.1
 
+# Log level: debug, info, warn or error (optional, defaults to info) and log
+# format: text or json (optional, defaults to text).
+# logLevel: info
+# logFormat: text
+
 proxies:
     # Destination hostname to proxy (required)
   - hostname: "example.your-domain.com"

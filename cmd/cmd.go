@@ -33,6 +33,8 @@ func Run() *cobra.Command {
 		skipTLS    bool
 		cfgFile    string
 		listenAddr string
+		logLevel   string
+		logFormat  string
 	)
 
 	cmd := &cobra.Command{
@@ -40,7 +42,12 @@ func Run() *cobra.Command {
 		Short: "Start reverse proxies",
 		Long:  "Start reverse proxies to Cloudflare Access applications",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			log := newLogger()
+			logOpts, err := resolveLogOptions(logLevel, logFormat,
+				cmd.Flags().Changed("log-level"), cmd.Flags().Changed("log-format"))
+			if err != nil {
+				return err
+			}
+			log := logOpts.logger()
 			hasEndpoints := cmd.Flags().Changed("endpoints")
 			hasConfig := cmd.Flags().Changed("config")
 
@@ -65,6 +72,18 @@ func Run() *cobra.Command {
 				// If config or default provided
 				if err := initConfig(log, cfgFile); err != nil {
 					return err
+				}
+
+				// The config file can only be read after the bootstrap logger is
+				// built, because loading it logs; its log settings therefore apply
+				// from here on and messages logged while loading follow the flag and
+				// environment only.
+				logOpts, changed, err := logOpts.withConfig()
+				if err != nil {
+					return err
+				}
+				if changed {
+					log = logOpts.logger()
 				}
 				log.Debug("config file loaded", "path", viper.ConfigFileUsed())
 
@@ -110,6 +129,9 @@ func Run() *cobra.Command {
 	cmd.Flags().BoolVarP(&skipTLS, "skip-tls", "s", false, "Skip TLS verification for every proxy")
 
 	cmd.Flags().StringVar(&listenAddr, "listen", "", "IP address to listen on for every proxy, overriding the config file (default 127.0.0.1)")
+
+	cmd.Flags().StringVar(&logLevel, "log-level", "", "Log level (debug, info, warn, error)")
+	cmd.Flags().StringVar(&logFormat, "log-format", "", "Log format (text, json)")
 
 	return cmd
 }
