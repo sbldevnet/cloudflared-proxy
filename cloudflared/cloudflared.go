@@ -1,6 +1,7 @@
 package cloudflared
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
@@ -11,14 +12,14 @@ import (
 
 // Commander executes a command and returns its combined output.
 type Commander interface {
-	CombinedOutput(name string, arg ...string) ([]byte, error)
+	CombinedOutput(ctx context.Context, name string, arg ...string) ([]byte, error)
 }
 
 // execCommander is the default implementation of Commander that executes real commands.
 type execCommander struct{}
 
-func (c *execCommander) CombinedOutput(name string, arg ...string) ([]byte, error) {
-	cmd := exec.Command(name, arg...)
+func (c *execCommander) CombinedOutput(ctx context.Context, name string, arg ...string) ([]byte, error) {
+	cmd := exec.CommandContext(ctx, name, arg...)
 	return cmd.CombinedOutput()
 }
 
@@ -32,8 +33,8 @@ const (
 
 var ErrAccessAppNotFound = errors.New("access application not found")
 
-func CloudflareAccessTokenForApp(url string) (string, error) {
-	output, err := cmdr.CombinedOutput("cloudflared", "access", "login", url)
+func CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error) {
+	output, err := cmdr.CombinedOutput(ctx, "cloudflared", "access", "login", url)
 	logger.Debug("cloudflared.CloudflareAccessTokenForApp", "executing cloudflared access login command for %s", url)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
@@ -49,7 +50,7 @@ func CloudflareAccessTokenForApp(url string) (string, error) {
 		return "", fmt.Errorf("cloudflared login failed: %s", outputStr)
 	}
 
-	output, err = cmdr.CombinedOutput("cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
+	output, err = cmdr.CombinedOutput(ctx, "cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
 	logger.Debug("cloudflared.CloudflareAccessTokenForApp", "executing cloudflared access token command for %s", url)
 	if err != nil {
 		return "", fmt.Errorf("cloudflared token failed: %s", string(output))
