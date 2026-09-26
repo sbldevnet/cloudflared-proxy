@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/sbldevnet/cloudflared-proxy/config"
-	"github.com/sbldevnet/cloudflared-proxy/internal"
-	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
+	"github.com/sbldevnet/cloudflared-proxy/logger"
+	"github.com/sbldevnet/cloudflared-proxy/proxy"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -80,7 +80,7 @@ func Run() *cobra.Command {
 			logger.Debug("cmd.Run", "Starting %d proxies", len(proxyConfigs))
 			logger.Debug("cmd.Run", "Proxy configs: %v", proxyConfigs)
 
-			return internal.ProxyCFAccess(cmd.Context(), proxyConfigs, internal.NewLiveProxyService())
+			return proxy.ProxyCFAccess(cmd.Context(), proxyConfigs, proxy.NewLiveProxyService())
 		},
 	}
 
