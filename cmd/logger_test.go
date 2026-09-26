@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,7 +79,7 @@ func TestNewLoggerTextOutput(t *testing.T) {
 }
 
 func TestNewLoggerJSONOutput(t *testing.T) {
-	t.Setenv("LOG_LEVEL", "")
+	t.Setenv("LOG_LEVEL", "debug")
 	t.Setenv("LOG_FORMAT", "json")
 
 	out := captureStderr(t, func() {
@@ -102,4 +103,34 @@ func TestNewLoggerJSONOutput(t *testing.T) {
 	assert.Contains(t, rec.Source.Function, "TestNewLoggerJSONOutput")
 	assert.Contains(t, rec.Source.File, "logger_test.go")
 	assert.NotZero(t, rec.Source.Line)
+}
+
+func TestNewLoggerSourceOnlyAtDebug(t *testing.T) {
+	tests := []struct {
+		name   string
+		format string
+		level  string
+		source bool
+	}{
+		{"text default level", "", "", false},
+		{"text debug", "", "debug", true},
+		{"json default level", "json", "", false},
+		{"json debug", "json", "debug", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("LOG_LEVEL", tt.level)
+			t.Setenv("LOG_FORMAT", tt.format)
+
+			out := captureStderr(t, func() {
+				newLogger().Info("hello")
+			})
+
+			if tt.format == "json" {
+				assert.Equal(t, tt.source, strings.Contains(out, `"source":`))
+			} else {
+				assert.Equal(t, tt.source, strings.Contains(out, "source="))
+			}
+		})
+	}
 }

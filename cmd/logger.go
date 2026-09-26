@@ -20,7 +20,7 @@ func newLogger() *slog.Logger {
 		}
 	}
 
-	opts := &slog.HandlerOptions{AddSource: true, Level: level}
+	opts := &slog.HandlerOptions{AddSource: level <= slog.LevelDebug, Level: level}
 
 	var handler slog.Handler
 	if os.Getenv("LOG_FORMAT") == "json" {
