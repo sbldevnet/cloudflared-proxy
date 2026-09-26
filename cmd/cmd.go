@@ -59,7 +59,6 @@ func Run() *cobra.Command {
 					if err != nil {
 						return err
 					}
-					proxy.SkipTLS = skipTLS
 					proxyConfigs[i] = *proxy
 				}
 			} else {
@@ -92,6 +91,14 @@ func Run() *cobra.Command {
 				return err
 			}
 
+			if cmd.Flags().Changed("skip-tls") {
+				overrideSkipTLS(proxyConfigs, skipTLS)
+			}
+			warnSkipTLS(log, proxyConfigs)
+
+			// Arguments are valid from here on; runtime errors should not print usage.
+			cmd.SilenceUsage = true
+
 			log.Debug("starting proxies", "count", len(proxyConfigs), "configs", proxyConfigs)
 
 			return proxy.New(proxy.WithLogger(log)).Run(cmd.Context(), proxyConfigs)
@@ -100,7 +107,7 @@ func Run() *cobra.Command {
 
 	cmd.Flags().StringVarP(&cfgFile, "config", "c", "", "config file (default is $HOME/.config/cloudflared-proxy/config.yaml)")
 	cmd.Flags().StringSliceVarP(&endpoints, "endpoints", "e", []string{}, "List of endpoints to proxy in format [LOCAL_PORT:]HOSTNAME[:DEST_PORT]")
-	cmd.Flags().BoolVarP(&skipTLS, "skip-tls", "s", false, "Skip TLS verification")
+	cmd.Flags().BoolVarP(&skipTLS, "skip-tls", "s", false, "Skip TLS verification for every proxy")
 
 	cmd.Flags().StringVar(&listenAddr, "listen", "", "IP address to listen on for every proxy, overriding the config file (default 127.0.0.1)")
 
@@ -122,6 +129,24 @@ func applyListenDefault(proxies []config.ProxyConfig, def string) {
 func overrideListen(proxies []config.ProxyConfig, addr string) {
 	for i := range proxies {
 		proxies[i].Listen = addr
+	}
+}
+
+// overrideSkipTLS sets skip on every proxy, taking precedence over any config
+// file value.
+func overrideSkipTLS(proxies []config.ProxyConfig, skip bool) {
+	for i := range proxies {
+		proxies[i].SkipTLS = skip
+	}
+}
+
+// warnSkipTLS logs one warning for each proxy whose upstream certificate is
+// not verified.
+func warnSkipTLS(log *slog.Logger, proxies []config.ProxyConfig) {
+	for _, p := range proxies {
+		if p.SkipTLS {
+			log.Warn("TLS certificate verification is disabled", "hostname", p.Hostname)
+		}
 	}
 }
 

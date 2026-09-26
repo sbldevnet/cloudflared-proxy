@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -163,6 +164,59 @@ func TestListenFlagRejectsInvalidValues(t *testing.T) {
 			err := cmd.Execute()
 
 			assert.ErrorContains(t, err, "IP address literal")
+		})
+	}
+}
+
+func TestSkipTLSPrecedence(t *testing.T) {
+	testCases := []struct {
+		name string
+		file []bool
+		flag *bool
+		want []bool
+	}{
+		{name: "endpoints, flag unset", file: []bool{false, false}, want: []bool{false, false}},
+		{name: "endpoints, flag true", file: []bool{false, false}, flag: ptr(true), want: []bool{true, true}},
+		{name: "endpoints, flag false", file: []bool{false, false}, flag: ptr(false), want: []bool{false, false}},
+		{name: "config file, flag unset keeps per-proxy values", file: []bool{true, false}, want: []bool{true, false}},
+		{name: "config file, flag true applies to all", file: []bool{true, false}, flag: ptr(true), want: []bool{true, true}},
+		{name: "config file, flag false forces verification", file: []bool{true, false}, flag: ptr(false), want: []bool{false, false}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			proxies := make([]config.ProxyConfig, len(tc.file))
+			for i, skip := range tc.file {
+				proxies[i] = config.ProxyConfig{Hostname: fmt.Sprintf("app%d.example.com", i), SkipTLS: skip}
+			}
+			h := &recordingHandler{}
+
+			if tc.flag != nil {
+				overrideSkipTLS(proxies, *tc.flag)
+			}
+			warnSkipTLS(slog.New(h), proxies)
+
+			var got []bool
+			var wantWarned []string
+			for _, p := range proxies {
+				got = append(got, p.SkipTLS)
+				if p.SkipTLS {
+					wantWarned = append(wantWarned, p.Hostname)
+				}
+			}
+			assert.Equal(t, tc.want, got)
+
+			var warned []string
+			for _, r := range h.records {
+				assert.Equal(t, slog.LevelWarn, r.Level)
+				r.Attrs(func(a slog.Attr) bool {
+					if a.Key == "hostname" {
+						warned = append(warned, a.Value.String())
+					}
+					return true
+				})
+			}
+			assert.Equal(t, wantWarned, warned)
 		})
 	}
 }
