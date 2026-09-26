@@ -14,26 +14,14 @@ import (
 
 // Runner starts reverse proxies to Cloudflare Access applications.
 type Runner struct {
+	// tokenFetcher returns cloudflared.ErrAccessAppNotFound when the address has
+	// no Access application; Run then continues without a token.
 	tokenFetcher func(ctx context.Context, url string) (string, error)
 	newServer    func(addr string, handler http.Handler) server
 }
 
 // Option configures a Runner.
 type Option func(*Runner)
-
-// WithTokenFetcher replaces how Cloudflare Access tokens are obtained.
-// A nil f is ignored and the default fetcher is kept.
-//
-// A fetcher receives the context of Run and the target address (host:port), and
-// returns its token. It should abort when the context is cancelled. It must return cloudflared.ErrAccessAppNotFound to mean "no Access application
-// exists at this address": the Runner then continues without a token.
-func WithTokenFetcher(f func(ctx context.Context, url string) (string, error)) Option {
-	return func(r *Runner) {
-		if f != nil {
-			r.tokenFetcher = f
-		}
-	}
-}
 
 // New returns a ready-to-use Runner; by default it uses the real cloudflared binary.
 func New(opts ...Option) *Runner {

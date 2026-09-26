@@ -125,14 +125,7 @@ err := proxy.New().Run(ctx, []config.ProxyConfig{
 })
 ```
 
-`Run` blocks until `ctx` is cancelled. Use `proxy.WithTokenFetcher` to replace how Cloudflare Access tokens are obtained:
-
-```go
-r := proxy.New(proxy.WithTokenFetcher(func(ctx context.Context, addr string) (string, error) {
-	// Return cloudflared.ErrAccessAppNotFound to continue without a token.
-	return tokenFor(ctx, addr)
-}))
-```
+`Run` blocks until `ctx` is cancelled.
 
 ---
 

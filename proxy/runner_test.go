@@ -58,7 +58,8 @@ func TestRunnerRun(t *testing.T) {
 	newRunner := func(fetch func(context.Context, string) (string, error)) (*Runner, *[]string, *[]http.Handler) {
 		var addrs []string
 		var handlers []http.Handler
-		r := New(WithTokenFetcher(fetch))
+		r := New()
+		r.tokenFetcher = fetch
 		r.newServer = func(addr string, handler http.Handler) server {
 			addrs = append(addrs, addr)
 			handlers = append(handlers, handler)
@@ -144,24 +145,4 @@ func TestRunnerRun(t *testing.T) {
 
 		assert.EqualError(t, err, "no proxy configurations provided")
 	})
-}
-
-func TestWithTokenFetcher(t *testing.T) {
-	called := false
-	r := New(WithTokenFetcher(func(context.Context, string) (string, error) {
-		called = true
-		return "t", nil
-	}))
-
-	token, err := r.tokenFetcher(context.Background(), "host:443")
-
-	require.NoError(t, err)
-	assert.Equal(t, "t", token)
-	assert.True(t, called)
-}
-
-func TestWithTokenFetcherNil(t *testing.T) {
-	r := New(WithTokenFetcher(nil))
-
-	assert.NotNil(t, r.tokenFetcher)
 }
