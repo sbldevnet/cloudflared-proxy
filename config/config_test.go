@@ -51,6 +51,33 @@ func TestParseEndpointString(t *testing.T) {
 			},
 		},
 		{
+			name:     "numeric hostname alone is a hostname",
+			endpoint: "12345",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "12345",
+				LocalPort:       DefaultLocalPort,
+				DestinationPort: DefaultDestinationPort,
+			},
+		},
+		{
+			name:     "numeric hostname with destination port is read as local port and hostname",
+			endpoint: "12345:443",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "443",
+				LocalPort:       12345,
+				DestinationPort: DefaultDestinationPort,
+			},
+		},
+		{
+			name:     "numeric hostname in full format",
+			endpoint: "8888:12345:443",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "12345",
+				LocalPort:       8888,
+				DestinationPort: 443,
+			},
+		},
+		{
 			name:        "invalid format - too many parts",
 			endpoint:    "1:2:3:4",
 			expectedErr: fmt.Errorf("invalid endpoint format '1:2:3:4'. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]"),
