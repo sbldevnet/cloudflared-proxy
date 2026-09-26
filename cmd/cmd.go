@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -61,7 +62,7 @@ func Run() *cobra.Command {
 				}
 			} else {
 				// If config or default provided
-				if err := initConfig(cfgFile); err != nil {
+				if err := initConfig(log, cfgFile); err != nil {
 					return err
 				}
 				log.Debug("config file loaded", "path", viper.ConfigFileUsed())
@@ -91,17 +92,19 @@ func Run() *cobra.Command {
 	return cmd
 }
 
-func initConfig(cfgFile string) error {
+func initConfig(log *slog.Logger, cfgFile string) error {
+	var dir string
 	if cfgFile != "" {
-		// Explicit config file
+		log.Debug("using explicit config file", "path", cfgFile)
 		viper.SetConfigFile(cfgFile)
 	} else {
-		// Try default config location
 		home, err := os.UserHomeDir()
 		if err != nil {
 			return err
 		}
-		viper.AddConfigPath(filepath.Join(home, ".config", "cloudflared-proxy"))
+		dir = filepath.Join(home, ".config", "cloudflared-proxy")
+		log.Debug("using default config location", "path", dir)
+		viper.AddConfigPath(dir)
 		viper.SetConfigName("config")
 	}
 
@@ -110,6 +113,7 @@ func initConfig(cfgFile string) error {
 			if cfgFile != "" {
 				return fmt.Errorf("config file not found: %s", cfgFile)
 			}
+			log.Debug("default config file not found", "path", dir)
 			return fmt.Errorf("no config file or endpoints provided")
 		}
 		return err
