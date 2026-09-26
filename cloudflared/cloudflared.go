@@ -11,7 +11,8 @@ import (
 	"sync"
 )
 
-// Commander executes a command and returns its combined output.
+// Commander executes commands and returns their combined output, optionally
+// forwarding stderr live.
 type Commander interface {
 	CombinedOutput(ctx context.Context, name string, arg ...string) ([]byte, error)
 	// StreamStderr behaves like CombinedOutput but also forwards the command's
@@ -77,7 +78,8 @@ func CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error
 			return "", ErrAccessAppNotFound
 		}
 
-		return "", fmt.Errorf("cloudflared login failed: %s", outputStr)
+		// The output was already streamed to the user, so it is not repeated here.
+		return "", fmt.Errorf("cloudflared login failed: %w", err)
 	}
 
 	output, err = cmdr.CombinedOutput(ctx, "cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))

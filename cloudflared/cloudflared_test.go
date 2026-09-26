@@ -112,12 +112,15 @@ func TestCloudflareAccessTokenForAppWithMock(t *testing.T) {
 		cmdr = mockCmdr
 
 		errOutput := []byte("some generic login error")
-		mockCmdr.On("StreamStderr", mock.Anything, "cloudflared", "access", "login", "--quiet", "app.example.com/login-fails").Return(errOutput, errors.New("exit status 1"))
+		execErr := errors.New("exit status 1")
+		mockCmdr.On("StreamStderr", mock.Anything, "cloudflared", "access", "login", "--quiet", "app.example.com/login-fails").Return(errOutput, execErr)
 
 		_, err := CloudflareAccessTokenForApp(context.Background(), "app.example.com/login-fails")
 
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "cloudflared login failed: some generic login error")
+		assert.ErrorIs(t, err, execErr)
+		assert.EqualError(t, err, "cloudflared login failed: exit status 1")
+		assert.NotContains(t, err.Error(), "some generic login error")
 		mockCmdr.AssertExpectations(t)
 	})
 
