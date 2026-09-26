@@ -3,6 +3,7 @@ package proxy
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -46,7 +47,7 @@ func TestNewDirector(t *testing.T) {
 		token: "test-token",
 	}
 
-	director := newDirector(config)
+	director := newDirector(slog.New(slog.DiscardHandler), config)
 
 	// Create a sample request to test the director
 	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
@@ -65,7 +66,7 @@ func TestRunnerServe(t *testing.T) {
 		getRandomPort = originalGetRandomPort
 	})
 
-	r := &Runner{}
+	r := New(WithLogger(slog.New(slog.DiscardHandler)))
 
 	t.Run("no proxy configs", func(t *testing.T) {
 		err := r.serve(context.Background(), []accessProxyConfig{})

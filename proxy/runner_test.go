@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -14,7 +15,6 @@ import (
 	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -48,8 +48,6 @@ var errFetch = errors.New("some-cf-error")
 
 func TestRunnerRun(t *testing.T) {
 	var logOutput bytes.Buffer
-	log.SetOutput(&logOutput)
-	t.Cleanup(func() { log.SetOutput(nil) })
 
 	cfgs := []config.ProxyConfig{
 		{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080},
@@ -58,7 +56,7 @@ func TestRunnerRun(t *testing.T) {
 	newRunner := func(fetch func(context.Context, string) (string, error)) (*Runner, *[]string, *[]http.Handler) {
 		var addrs []string
 		var handlers []http.Handler
-		r := New()
+		r := New(WithLogger(slog.New(slog.NewTextHandler(&logOutput, nil))))
 		r.tokenFetcher = fetch
 		r.newServer = func(addr string, handler http.Handler) server {
 			addrs = append(addrs, addr)
@@ -109,7 +107,7 @@ func TestRunnerRun(t *testing.T) {
 		require.NoError(t, runWithCancelledContext(r, cfgs))
 
 		assert.Equal(t, []string{":8080"}, *addrs)
-		assert.Contains(t, logOutput.String(), "Access application not found at app1.example.com:443, continuing without authentication")
+		assert.Contains(t, logOutput.String(), "Access application not found, continuing without authentication")
 	})
 
 	t.Run("token error aborts before starting servers", func(t *testing.T) {

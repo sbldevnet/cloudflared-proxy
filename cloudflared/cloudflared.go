@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-
-	"github.com/sbldevnet/cloudflared-proxy/logger"
 )
 
 // Commander executes a command and returns its combined output.
@@ -35,7 +33,6 @@ var ErrAccessAppNotFound = errors.New("access application not found")
 
 func CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error) {
 	output, err := cmdr.CombinedOutput(ctx, "cloudflared", "access", "login", url)
-	logger.Debug("cloudflared.CloudflareAccessTokenForApp", "executing cloudflared access login command for %s", url)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return "", fmt.Errorf("cloudflared is not installed. Please install it first: %s", cloudflaredDocURL)
@@ -51,7 +48,6 @@ func CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error
 	}
 
 	output, err = cmdr.CombinedOutput(ctx, "cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
-	logger.Debug("cloudflared.CloudflareAccessTokenForApp", "executing cloudflared access token command for %s", url)
 	if err != nil {
 		return "", fmt.Errorf("cloudflared token failed: %s", string(output))
 	}
