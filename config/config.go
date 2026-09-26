@@ -2,12 +2,16 @@ package config
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
 const (
 	DefaultLocalPort       uint16 = 8888
 	DefaultDestinationPort uint16 = 443
+
+	minPort = 1
+	maxPort = 65535
 )
 
 type ProxyConfig struct {
@@ -24,23 +28,22 @@ type Config struct {
 // ParseEndpointString parses a string representation of a proxy endpoint
 // into a ProxyConfig struct. The format is [LOCAL_PORT:]HOSTNAME[:DEST_PORT].
 //
-// With two colon-separated parts the input is ambiguous: it can be
-// LOCAL_PORT:HOSTNAME or HOSTNAME:DEST_PORT. The first part is treated as a
-// local port if it starts with a number, and as a hostname otherwise. As a
-// consequence, a purely numeric hostname cannot be combined with only a
-// destination port: "12345:443" yields local port 12345 and hostname "443",
-// not hostname "12345" with destination port 443. A single part is always
-// taken as the hostname, so "12345" is a valid numeric hostname.
+// A part is a port only if the whole token is a number between 1 and 65535;
+// anything else, such as "8x8.com" or "443x", is not a port. A single part is
+// always the hostname, so "12345" is a valid numeric hostname.
 //
-// To use a numeric hostname with a destination port, always give the full
-// three-part form, e.g. "8888:12345:443".
+// With two parts the input is LOCAL_PORT:HOSTNAME if the first part is a
+// port, and HOSTNAME:DEST_PORT otherwise. The one ambiguity this leaves is a
+// purely numeric hostname with only a destination port: "12345:443" is local
+// port 12345 and hostname "443". Use the three-part form to avoid it, e.g.
+// "8888:12345:443".
 func ParseEndpointString(endpoint string) (*ProxyConfig, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("endpoint cannot be empty. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]")
 	}
 
 	parts := strings.Split(endpoint, ":")
-	if len(parts) == 0 || len(parts) > 3 {
+	if len(parts) > 3 {
 		return nil, fmt.Errorf("invalid endpoint format '%s'. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]", endpoint)
 	}
 
@@ -49,25 +52,26 @@ func ParseEndpointString(endpoint string) (*ProxyConfig, error) {
 	var destPort = DefaultDestinationPort
 
 	switch len(parts) {
-	case 1: // Only hostname provided
+	case 1:
 		hostname = parts[0]
-	case 2: // Two parts could be either LOCAL_PORT:HOSTNAME or HOSTNAME:DEST_PORT
-		// Try to parse first part as local port
-		if _, err := fmt.Sscanf(parts[0], "%d", &localPort); err == nil {
+	case 2:
+		if port, err := parsePort(parts[0]); err == nil {
+			localPort = port
 			hostname = parts[1]
-		} else { // Assume HOSTNAME:DEST_PORT
-			if _, err := fmt.Sscanf(parts[1], "%d", &destPort); err != nil {
-				return nil, fmt.Errorf("invalid destination port '%s': %v", parts[1], err)
-			}
+		} else if port, err := parsePort(parts[1]); err == nil {
+			destPort = port
 			hostname = parts[0]
+		} else {
+			return nil, fmt.Errorf("invalid endpoint '%s': neither '%s' nor '%s' is a valid port (must be a number between %d and %d)", endpoint, parts[0], parts[1], minPort, maxPort)
 		}
-	case 3: // Full format: LOCAL_PORT:HOSTNAME:DEST_PORT
-		if _, err := fmt.Sscanf(parts[0], "%d", &localPort); err != nil {
-			return nil, fmt.Errorf("invalid local port '%s': %v", parts[0], err)
+	case 3:
+		var err error
+		if localPort, err = parsePort(parts[0]); err != nil {
+			return nil, fmt.Errorf("invalid local port '%s': must be a number between %d and %d", parts[0], minPort, maxPort)
 		}
 		hostname = parts[1]
-		if _, err := fmt.Sscanf(parts[2], "%d", &destPort); err != nil {
-			return nil, fmt.Errorf("invalid destination port '%s': %v", parts[2], err)
+		if destPort, err = parsePort(parts[2]); err != nil {
+			return nil, fmt.Errorf("invalid destination port '%s': must be a number between %d and %d", parts[2], minPort, maxPort)
 		}
 	}
 
@@ -80,6 +84,17 @@ func ParseEndpointString(endpoint string) (*ProxyConfig, error) {
 		LocalPort:       localPort,
 		DestinationPort: destPort,
 	}, nil
+}
+
+func parsePort(s string) (uint16, error) {
+	port, err := strconv.ParseUint(s, 10, 16)
+	if err != nil {
+		return 0, err
+	}
+	if port < minPort {
+		return 0, fmt.Errorf("port %d out of range", port)
+	}
+	return uint16(port), nil
 }
 
 // Returns the full address of the target application.

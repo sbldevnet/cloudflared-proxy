@@ -78,24 +78,121 @@ func TestParseEndpointString(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid format - too many parts",
-			endpoint:    "1:2:3:4",
-			expectedErr: fmt.Errorf("invalid endpoint format '1:2:3:4'. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]"),
+			name:     "digit-leading hostname",
+			endpoint: "8x8.com",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "8x8.com",
+				LocalPort:       DefaultLocalPort,
+				DestinationPort: DefaultDestinationPort,
+			},
 		},
 		{
-			name:        "invalid format - empty string",
-			endpoint:    "",
-			expectedErr: fmt.Errorf("endpoint cannot be empty. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]"),
+			name:     "digit-leading hostname with destination port",
+			endpoint: "8x8.com:443",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "8x8.com",
+				LocalPort:       DefaultLocalPort,
+				DestinationPort: 443,
+			},
+		},
+		{
+			name:     "digit-and-letter hostname with destination port",
+			endpoint: "3m.com:443",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "3m.com",
+				LocalPort:       DefaultLocalPort,
+				DestinationPort: 443,
+			},
+		},
+		{
+			name:     "digit-leading hostname with alternate destination port",
+			endpoint: "1password.com:8443",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "1password.com",
+				LocalPort:       DefaultLocalPort,
+				DestinationPort: 8443,
+			},
+		},
+		{
+			name:     "digit-leading hostname without dots",
+			endpoint: "9gag.com",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "9gag.com",
+				LocalPort:       DefaultLocalPort,
+				DestinationPort: DefaultDestinationPort,
+			},
+		},
+		{
+			name:     "numeric hostname alone",
+			endpoint: "12345",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "12345",
+				LocalPort:       DefaultLocalPort,
+				DestinationPort: DefaultDestinationPort,
+			},
+		},
+		{
+			name:     "numeric hostname with destination port reads as local port and hostname",
+			endpoint: "12345:443",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "443",
+				LocalPort:       12345,
+				DestinationPort: DefaultDestinationPort,
+			},
+		},
+		{
+			name:     "numeric hostname in full format",
+			endpoint: "8888:12345:443",
+			expectedConfig: &ProxyConfig{
+				Hostname:        "12345",
+				LocalPort:       8888,
+				DestinationPort: 443,
+			},
+		},
+		{
+			name:        "trailing junk on destination port",
+			endpoint:    "example.com:443x",
+			expectedErr: fmt.Errorf("invalid endpoint 'example.com:443x': neither 'example.com' nor '443x' is a valid port (must be a number between 1 and 65535)"),
+		},
+		{
+			name:        "trailing junk on full-format destination port",
+			endpoint:    "8888:example.com:443abc",
+			expectedErr: fmt.Errorf("invalid destination port '443abc': must be a number between 1 and 65535"),
+		},
+		{
+			name:        "destination port zero",
+			endpoint:    "example.com:0",
+			expectedErr: fmt.Errorf("invalid endpoint 'example.com:0': neither 'example.com' nor '0' is a valid port (must be a number between 1 and 65535)"),
+		},
+		{
+			name:        "local port out of range",
+			endpoint:    "70000:example.com",
+			expectedErr: fmt.Errorf("invalid endpoint '70000:example.com': neither '70000' nor 'example.com' is a valid port (must be a number between 1 and 65535)"),
+		},
+		{
+			name:        "full format local port out of range",
+			endpoint:    "70000:example.com:443",
+			expectedErr: fmt.Errorf("invalid local port '70000': must be a number between 1 and 65535"),
 		},
 		{
 			name:        "invalid local port",
 			endpoint:    "abc:host:123",
-			expectedErr: fmt.Errorf("invalid local port 'abc'"),
+			expectedErr: fmt.Errorf("invalid local port 'abc': must be a number between 1 and 65535"),
 		},
 		{
 			name:        "invalid destination port",
 			endpoint:    "host:abc",
-			expectedErr: fmt.Errorf("invalid destination port 'abc'"),
+			expectedErr: fmt.Errorf("invalid endpoint 'host:abc': neither 'host' nor 'abc' is a valid port (must be a number between 1 and 65535)"),
+		},
+		{
+			name:        "too many parts",
+			endpoint:    "1:2:3:4",
+			expectedErr: fmt.Errorf("invalid endpoint format '1:2:3:4'. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]"),
+		},
+		{
+			name:        "empty string",
+			endpoint:    "",
+			expectedErr: fmt.Errorf("endpoint cannot be empty. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]"),
 		},
 	}
 
@@ -105,8 +202,7 @@ func TestParseEndpointString(t *testing.T) {
 
 			if tc.expectedErr != nil {
 				assert.Error(t, err)
-				// Check for a prefix of the error message because the Sscanf error can vary.
-				assert.Contains(t, err.Error(), tc.expectedErr.Error())
+				assert.EqualError(t, err, tc.expectedErr.Error())
 			} else {
 				assert.NoError(t, err)
 				assert.Equal(t, tc.expectedConfig, config)
