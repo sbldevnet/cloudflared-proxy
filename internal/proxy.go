@@ -13,7 +13,7 @@ import (
 )
 
 type ProxyService interface {
-	GetCloudflareAccessTokenForApp(url string) (string, error)
+	CloudflareAccessTokenForApp(url string) (string, error)
 	StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error
 }
 
@@ -23,8 +23,8 @@ func NewLiveProxyService() *LiveProxyService {
 	return &LiveProxyService{}
 }
 
-func (s *LiveProxyService) GetCloudflareAccessTokenForApp(url string) (string, error) {
-	return cloudflared.GetCloudflareAccessTokenForApp(url)
+func (s *LiveProxyService) CloudflareAccessTokenForApp(url string) (string, error) {
+	return cloudflared.CloudflareAccessTokenForApp(url)
 }
 
 func (s *LiveProxyService) StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error {
@@ -34,7 +34,7 @@ func (s *LiveProxyService) StartMultipleProxies(ctx context.Context, configs []p
 func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig, service ProxyService) error {
 	proxyConfigs := make([]proxy.CFAccessProxyConfig, len(configs))
 	for i, config := range configs {
-		token, err := service.GetCloudflareAccessTokenForApp(config.Address())
+		token, err := service.CloudflareAccessTokenForApp(config.Address())
 		if err != nil {
 			if errors.Is(err, cloudflared.ErrAccessAppNotFound) {
 				logger.Warn("proxy.ProxyCFAccess", "Access application not found at %s, continuing without authentication", config.Address())
