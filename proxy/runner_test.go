@@ -131,7 +131,7 @@ func TestRunnerRun(t *testing.T) {
 		require.NoError(t, runWithCancelledContext(r, backendCfgs))
 
 		assert.Equal(t, []string{backendURL.Host}, fetched)
-		assert.Equal(t, []string{":8080"}, *addrs)
+		assert.Equal(t, []string{"127.0.0.1:8080"}, *addrs)
 		require.Len(t, *handlers, 1)
 
 		rec := httptest.NewRecorder()
@@ -148,7 +148,7 @@ func TestRunnerRun(t *testing.T) {
 
 		require.NoError(t, runWithCancelledContext(r, cfgs))
 
-		assert.Equal(t, []string{":8080"}, *addrs)
+		assert.Equal(t, []string{"127.0.0.1:8080"}, *addrs)
 		attrs, ok := logs.find("Access application not found, continuing without authentication")
 		require.True(t, ok, "warning not logged")
 		assert.Equal(t, slog.LevelWarn, attrs["level"])
@@ -187,5 +187,39 @@ func TestRunnerRun(t *testing.T) {
 		err := runWithCancelledContext(r, nil)
 
 		assert.EqualError(t, err, "no proxy configurations provided")
+	})
+
+	t.Run("listen address", func(t *testing.T) {
+		for _, tc := range []struct {
+			name, listen, want string
+		}{
+			{"empty defaults to loopback", "", "127.0.0.1:8080"},
+			{"explicit ipv4", "0.0.0.0", "0.0.0.0:8080"},
+			{"ipv6", "::1", "[::1]:8080"},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				r, addrs, _ := newRunner(func(context.Context, string) (string, error) { return "", nil })
+				c := []config.ProxyConfig{{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080, Listen: tc.listen}}
+
+				require.NoError(t, runWithCancelledContext(r, c))
+
+				assert.Equal(t, []string{tc.want}, *addrs)
+			})
+		}
+	})
+
+	t.Run("invalid listen address aborts before fetching or starting servers", func(t *testing.T) {
+		for _, bad := range []string{"localhost", "example.com", "999.1.1.1", "127.0.0.1:8080"} {
+			var fetched int
+			r, addrs, _ := newRunner(func(context.Context, string) (string, error) { fetched++; return "", nil })
+			c := []config.ProxyConfig{{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080, Listen: bad}}
+
+			err := r.Run(context.Background(), c)
+
+			assert.ErrorContains(t, err, "IP address literal", bad)
+			assert.ErrorContains(t, err, "app1.example.com")
+			assert.Zero(t, fetched)
+			assert.Empty(t, *addrs)
+		}
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/sbldevnet/cloudflared-proxy/config"
+	"github.com/sbldevnet/cloudflared-proxy/internal/listen"
 	"github.com/sbldevnet/cloudflared-proxy/proxy"
 
 	"github.com/spf13/cobra"
@@ -28,9 +29,10 @@ func Execute() *cobra.Command {
 
 func Run() *cobra.Command {
 	var (
-		endpoints []string
-		skipTLS   bool
-		cfgFile   string
+		endpoints  []string
+		skipTLS    bool
+		cfgFile    string
+		listenAddr string
 	)
 
 	cmd := &cobra.Command{
@@ -77,6 +79,17 @@ func Run() *cobra.Command {
 				}
 				config.SetDefaults(cfg.Proxies)
 				proxyConfigs = cfg.Proxies
+				applyListenDefault(proxyConfigs, cfg.Listen)
+			}
+
+			if cmd.Flags().Changed("listen") {
+				if err := listen.Validate(listenAddr); err != nil {
+					return err
+				}
+				overrideListen(proxyConfigs, listenAddr)
+			}
+			if err := validateListen(proxyConfigs); err != nil {
+				return err
 			}
 
 			log.Debug("starting proxies", "count", len(proxyConfigs), "configs", proxyConfigs)
@@ -89,7 +102,41 @@ func Run() *cobra.Command {
 	cmd.Flags().StringSliceVarP(&endpoints, "endpoints", "e", []string{}, "List of endpoints to proxy in format [LOCAL_PORT:]HOSTNAME[:DEST_PORT]")
 	cmd.Flags().BoolVarP(&skipTLS, "skip-tls", "s", false, "Skip TLS verification")
 
+	cmd.Flags().StringVar(&listenAddr, "listen", "", "IP address to listen on for every proxy, overriding the config file (default 127.0.0.1)")
+
 	return cmd
+}
+
+// applyListenDefault sets the top-level listen address on proxies that do not
+// define their own.
+func applyListenDefault(proxies []config.ProxyConfig, def string) {
+	for i := range proxies {
+		if proxies[i].Listen == "" {
+			proxies[i].Listen = def
+		}
+	}
+}
+
+// overrideListen sets addr on every proxy, taking precedence over any config
+// file value.
+func overrideListen(proxies []config.ProxyConfig, addr string) {
+	for i := range proxies {
+		proxies[i].Listen = addr
+	}
+}
+
+// validateListen checks every explicitly set listen address. Empty values are
+// left for the runner to default to loopback.
+func validateListen(proxies []config.ProxyConfig) error {
+	for _, p := range proxies {
+		if p.Listen == "" {
+			continue
+		}
+		if err := listen.Validate(p.Listen); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func initConfig(log *slog.Logger, cfgFile string) error {

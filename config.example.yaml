@@ -2,6 +2,11 @@
 # Viper supports multiple formats: YAML, JSON, TOML, HCL, INI, envfile, and Java properties
 # Copy this file to ~/.config/cloudflared-proxy/config.yaml and modify as needed
 
+# IP address the proxies listen on (optional, defaults to 127.0.0.1).
+# Applies to every proxy that does not set its own "listen". Must be an IP
+# literal, not a hostname. The --listen flag overrides this and any per-proxy value.
+# listen: 127.0.0.1
+
 proxies:
     # Destination hostname to proxy (required)
   - hostname: "example.your-domain.com"
@@ -11,3 +16,5 @@ proxies:
     destinationPort: 443
     # Skip TLS verification (optional, defaults to false)
     skipTLS: false
+    # IP address to listen on for this proxy (optional, overrides the top-level "listen")
+    # listen: 127.0.0.1

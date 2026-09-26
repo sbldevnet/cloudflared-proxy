@@ -19,9 +19,15 @@ type ProxyConfig struct {
 	DestinationPort uint16 `mapstructure:"destinationPort"`
 	LocalPort       uint16 `mapstructure:"localPort"`
 	SkipTLS         bool   `mapstructure:"skipTLS"`
+	// Listen is the IP address the proxy binds to, without a port. Empty means
+	// loopback (127.0.0.1); use 0.0.0.0 or a specific interface address to
+	// expose the proxy to other machines.
+	Listen string `mapstructure:"listen"`
 }
 
 type Config struct {
+	// Listen is the default for proxies that do not set their own Listen.
+	Listen  string        `mapstructure:"listen"`
 	Proxies []ProxyConfig `mapstructure:"proxies"`
 }
 

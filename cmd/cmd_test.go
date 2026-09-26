@@ -8,6 +8,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/sbldevnet/cloudflared-proxy/config"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -94,3 +95,76 @@ func TestInitConfigDiagnostics(t *testing.T) {
 		}, h.messages())
 	})
 }
+
+func TestListenPrecedence(t *testing.T) {
+	testCases := []struct {
+		name     string
+		topLevel string
+		perProxy string
+		flag     *string
+		want     string
+	}{
+		{name: "nothing set leaves the runner default", want: ""},
+		{name: "top-level applies", topLevel: "0.0.0.0", want: "0.0.0.0"},
+		{name: "per-proxy over top-level", topLevel: "0.0.0.0", perProxy: "127.0.0.1", want: "127.0.0.1"},
+		{name: "flag over per-proxy and top-level", topLevel: "0.0.0.0", perProxy: "192.168.1.5", flag: ptr("::1"), want: "::1"},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			proxies := []config.ProxyConfig{{Hostname: "a.example.com", Listen: tc.perProxy}}
+
+			applyListenDefault(proxies, tc.topLevel)
+			if tc.flag != nil {
+				overrideListen(proxies, *tc.flag)
+			}
+
+			assert.Equal(t, tc.want, proxies[0].Listen)
+		})
+	}
+}
+
+func TestValidateListen(t *testing.T) {
+	assert.NoError(t, validateListen([]config.ProxyConfig{{Listen: ""}, {Listen: "::1"}, {Listen: "10.0.0.1"}}))
+	assert.ErrorContains(t, validateListen([]config.ProxyConfig{{Listen: "localhost"}}), "IP address literal")
+	assert.ErrorContains(t, validateListen([]config.ProxyConfig{{Listen: "example.com"}}), "IP address literal")
+}
+
+func TestListenConfigKeys(t *testing.T) {
+	viper.Reset()
+	t.Cleanup(viper.Reset)
+	file := filepath.Join(t.TempDir(), "cfg.yaml")
+	yaml := `listen: 0.0.0.0
+proxies:
+  - hostname: app1.example.com
+  - hostname: app2.example.com
+    listen: 127.0.0.1
+`
+	require.NoError(t, os.WriteFile(file, []byte(yaml), 0o600))
+	require.NoError(t, initConfig(slog.New(&recordingHandler{}), file))
+
+	var cfg config.Config
+	require.NoError(t, viper.Unmarshal(&cfg))
+	applyListenDefault(cfg.Proxies, cfg.Listen)
+
+	assert.Equal(t, "0.0.0.0", cfg.Listen)
+	assert.Equal(t, "0.0.0.0", cfg.Proxies[0].Listen)
+	assert.Equal(t, "127.0.0.1", cfg.Proxies[1].Listen)
+}
+
+func TestListenFlagRejectsInvalidValues(t *testing.T) {
+	for _, value := range []string{"", "localhost", "example.com", "999.1.1.1"} {
+		t.Run(value, func(t *testing.T) {
+			cmd := Run()
+			cmd.SetArgs([]string{"-e", "example.com", "--listen", value})
+			cmd.SilenceUsage = true
+			cmd.SilenceErrors = true
+
+			err := cmd.Execute()
+
+			assert.ErrorContains(t, err, "IP address literal")
+		})
+	}
+}
+
+func ptr[T any](v T) *T { return &v }

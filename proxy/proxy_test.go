@@ -14,6 +14,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 type MockServer struct {
@@ -73,6 +74,26 @@ func serveUntilListening(t *testing.T, r *Runner, configs []accessProxyConfig, l
 		return nil
 	}
 }
+
+// addrRecordingServer records the address of each ListenAndServe call and
+// reports the port as in use on the first one.
+type addrRecordingServer struct {
+	http.Server
+	listening chan<- struct{}
+	addrs     []string
+}
+
+func (s *addrRecordingServer) ListenAndServe() error {
+	s.addrs = append(s.addrs, s.Server.Addr)
+	s.listening <- struct{}{}
+	if len(s.addrs) == 1 {
+		return syscall.EADDRINUSE
+	}
+	return http.ErrServerClosed
+}
+
+func (s *addrRecordingServer) Shutdown(context.Context) error { return nil }
+func (s *addrRecordingServer) HTTPServer() *http.Server       { return &s.Server }
 
 // TestNewDirector validates that the director function is configured correctly.
 func TestNewDirector(t *testing.T) {
@@ -141,8 +162,8 @@ func TestRunnerServe(t *testing.T) {
 		u1, _ := url.Parse("https://app.example.com")
 		u2, _ := url.Parse("https://app2.example.com")
 		configs := []accessProxyConfig{
-			{url: u1, localPort: 8080},
-			{url: u2, localPort: 8082},
+			{url: u1, localPort: 8080, listen: "127.0.0.1"},
+			{url: u2, localPort: 8082, listen: "127.0.0.1"},
 		}
 
 		serveUntilListening(t, r, configs, listening, 2)
@@ -159,7 +180,7 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080},
+			{url: u, localPort: 8080, listen: "127.0.0.1"},
 		}
 
 		mockSrvr.On("ListenAndServe").Return(http.ErrServerClosed).Once()
@@ -181,7 +202,7 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080},
+			{url: u, localPort: 8080, listen: "127.0.0.1"},
 		}
 
 		mockSrvr.On("ListenAndServe").Return(syscall.EADDRINUSE).Once()
@@ -203,7 +224,7 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080},
+			{url: u, localPort: 8080, listen: "127.0.0.1"},
 		}
 
 		genericError := errors.New("a generic error")
@@ -213,5 +234,58 @@ func TestRunnerServe(t *testing.T) {
 		assert.NoError(t, serveUntilListening(t, r, configs, listening, 1))
 
 		mockSrvr.AssertExpectations(t)
+	})
+
+	t.Run("retry keeps the listen host", func(t *testing.T) {
+		listening := make(chan struct{}, 2)
+		srv := &addrRecordingServer{listening: listening}
+		r.newServer = func(addr string, handler http.Handler) server {
+			srv.Server.Addr = addr
+			return srv
+		}
+		getRandomPort = func() int { return 9090 }
+
+		u, _ := url.Parse("https://app.example.com")
+		configs := []accessProxyConfig{{url: u, localPort: 8080, listen: "::1"}}
+
+		assert.NoError(t, serveUntilListening(t, r, configs, listening, 2))
+
+		assert.Equal(t, []string{"[::1]:8080", "[::1]:9090"}, srv.addrs)
+	})
+
+	t.Run("warns once when not loopback", func(t *testing.T) {
+		for _, tc := range []struct {
+			listen   string
+			wantWarn bool
+		}{
+			{"127.0.0.1", false},
+			{"::1", false},
+			{"0.0.0.0", true},
+			{"::", true},
+			{"192.168.1.10", true},
+		} {
+			logs := &recordingHandler{}
+			lr := New(WithLogger(slog.New(logs)))
+			listening := make(chan struct{}, 1)
+			lr.newServer = func(addr string, handler http.Handler) server {
+				m := &MockServer{listening: listening}
+				m.On("ListenAndServe").Return(http.ErrServerClosed).Once()
+				m.On("Shutdown", mock.Anything).Return(nil).Once()
+				return m
+			}
+			u, _ := url.Parse("https://app.example.com")
+
+			assert.NoError(t, serveUntilListening(t, lr, []accessProxyConfig{{url: u, localPort: 8080, listen: tc.listen}}, listening, 1))
+
+			attrs, warned := logs.find("proxy is reachable from other machines and forwards requests with your Cloudflare Access token")
+			assert.Equal(t, tc.wantWarn, warned, tc.listen)
+			if warned {
+				assert.Equal(t, slog.LevelWarn, attrs["level"])
+				assert.Equal(t, tc.listen, attrs["listen"])
+			}
+			start, ok := logs.find("starting proxy server")
+			require.True(t, ok)
+			assert.Equal(t, tc.listen, start["listen"])
+		}
 	})
 }

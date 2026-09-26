@@ -4,16 +4,19 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
 	"log/slog"
 	"math/rand/v2"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/sbldevnet/cloudflared-proxy/internal/listen"
 )
 
 // server defines the behavior of a server that can be started and shut down.
@@ -62,6 +65,7 @@ type accessProxyConfig struct {
 	url       *url.URL
 	token     string
 	localPort uint16
+	listen    string
 	skipTLS   bool
 }
 
@@ -99,7 +103,7 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 		proxy.Transport = transport
 		proxy.Director = newDirector(r.log, proxyConfig)
 
-		addr := fmt.Sprintf(":%d", proxyConfig.localPort)
+		addr := net.JoinHostPort(proxyConfig.listen, strconv.Itoa(int(proxyConfig.localPort)))
 		entry := &serverEntry{server: r.newServer(addr, proxy)}
 		entry.addr.Store(&addr)
 		entries = append(entries, entry)
@@ -107,7 +111,10 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			r.log.Info("starting proxy server", "local_port", proxyConfig.localPort, "target", proxyConfig.url.String())
+			r.log.Info("starting proxy server", "listen", proxyConfig.listen, "local_port", proxyConfig.localPort, "target", proxyConfig.url.String())
+			if !listen.IsLoopback(proxyConfig.listen) {
+				r.log.Warn("proxy is reachable from other machines and forwards requests with your Cloudflare Access token", "listen", proxyConfig.listen, "local_port", proxyConfig.localPort, "target", proxyConfig.url.String())
+			}
 
 			err := entry.server.ListenAndServe()
 
@@ -115,7 +122,7 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 			if err != nil && errors.Is(err, syscall.EADDRINUSE) {
 				randomPort := getRandomPort()
 				r.log.Warn("port in use, retrying on random port", "local_port", proxyConfig.localPort, "target", proxyConfig.url.String(), "retry_port", randomPort)
-				entry.setAddr(fmt.Sprintf(":%d", randomPort))
+				entry.setAddr(net.JoinHostPort(proxyConfig.listen, strconv.Itoa(randomPort)))
 				err = entry.server.ListenAndServe() // Retry
 			}
 
