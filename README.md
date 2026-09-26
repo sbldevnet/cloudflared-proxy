@@ -110,6 +110,24 @@ Configuration priority:
    - If not found, the program will display help information
    - Example: `./cloudflared-proxy run`
 
+## Use as a library
+
+The `proxy` package can be embedded in other Go programs:
+
+```go
+import (
+	"github.com/sbldevnet/cloudflared-proxy/config"
+	"github.com/sbldevnet/cloudflared-proxy/proxy"
+)
+
+err := proxy.New().Run(ctx, []config.ProxyConfig{
+	{Hostname: "example.com", DestinationPort: 443, LocalPort: 8888},
+})
+```
+
+`Run` blocks until `ctx` is cancelled. Use `proxy.WithTokenFetcher` to replace how Cloudflare Access tokens are obtained; a fetcher returns `cloudflared.ErrAccessAppNotFound` to continue without a token.
+
 ---
 
 For more details on Cloudflare Tunnels, see the [official documentation](https://developers.cloudflare.com/cloudflare-one/tutorials/cli/).
+

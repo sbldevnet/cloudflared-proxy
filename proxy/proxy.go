@@ -17,14 +17,14 @@ import (
 	"github.com/sbldevnet/cloudflared-proxy/logger"
 )
 
-// Server defines the behavior of a server that can be started and shut down.
-type Server interface {
+// server defines the behavior of a server that can be started and shut down.
+type server interface {
 	ListenAndServe() error
 	Shutdown(ctx context.Context) error
 	HTTPServer() *http.Server
 }
 
-// httpServer is a wrapper around http.Server that implements the Server interface.
+// httpServer is a wrapper around http.Server that implements the server interface.
 type httpServer struct {
 	*http.Server
 }
@@ -34,8 +34,7 @@ func (s *httpServer) HTTPServer() *http.Server {
 	return s.Server
 }
 
-// newServer is a constructor that can be replaced in tests.
-var newServer = func(addr string, handler http.Handler) Server {
+func newHTTPServer(addr string, handler http.Handler) server {
 	return &httpServer{
 		&http.Server{
 			Addr:    addr,
@@ -49,29 +48,29 @@ const (
 	randomPortStart = 8000
 )
 
-func newDirector(config CFAccessProxyConfig) func(*http.Request) {
+func newDirector(config accessProxyConfig) func(*http.Request) {
 	return func(req *http.Request) {
-		req.URL.Scheme = config.Url.Scheme
-		req.URL.Host = config.Url.Host
-		req.Host = config.Url.Host
-		req.Header.Add("cf-access-token", config.Token)
+		req.URL.Scheme = config.url.Scheme
+		req.URL.Host = config.url.Host
+		req.Host = config.url.Host
+		req.Header.Add("cf-access-token", config.token)
 
 		// Debug requests through the proxy
-		logger.Debug("proxy.Proxy", "Request to localhost:%d, URL: %s, Headers: %v", config.LocalPort, req.URL, req.Header)
+		logger.Debug("proxy.Proxy", "Request to localhost:%d, URL: %s, Headers: %v", config.localPort, req.URL, req.Header)
 	}
 }
 
-type CFAccessProxyConfig struct {
-	Url       *url.URL
-	Token     string
-	LocalPort uint16 // change to local port
-	SkipTLS   bool
+type accessProxyConfig struct {
+	url       *url.URL
+	token     string
+	localPort uint16
+	skipTLS   bool
 }
 
 // addr is tracked outside http.Server.Addr: the retry goroutine reassigns
 // that field concurrently with the shutdown loop reading it for logging.
 type serverEntry struct {
-	server Server
+	server server
 	addr   atomic.Pointer[string]
 }
 
@@ -84,7 +83,7 @@ func (e *serverEntry) getAddr() string {
 	return *e.addr.Load()
 }
 
-func StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) error {
+func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 	if len(configs) == 0 {
 		return errors.New("no proxy configurations provided")
 	}
@@ -95,35 +94,35 @@ func StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) er
 	for _, proxyConfig := range configs {
 
 		transport := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: proxyConfig.SkipTLS, MinVersion: tls.VersionTLS12},
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: proxyConfig.skipTLS, MinVersion: tls.VersionTLS12},
 		}
 
-		proxy := httputil.NewSingleHostReverseProxy(proxyConfig.Url)
+		proxy := httputil.NewSingleHostReverseProxy(proxyConfig.url)
 		proxy.Transport = transport
 		proxy.Director = newDirector(proxyConfig)
 
-		addr := fmt.Sprintf(":%d", proxyConfig.LocalPort)
-		entry := &serverEntry{server: newServer(addr, proxy)}
+		addr := fmt.Sprintf(":%d", proxyConfig.localPort)
+		entry := &serverEntry{server: r.newServer(addr, proxy)}
 		entry.addr.Store(&addr)
 		entries = append(entries, entry)
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			logger.Info("proxy.Proxy", "Starting proxy server on http://localhost:%d, forwarding to %s", proxyConfig.LocalPort, proxyConfig.Url.String())
+			logger.Info("proxy.Proxy", "Starting proxy server on http://localhost:%d, forwarding to %s", proxyConfig.localPort, proxyConfig.url.String())
 
 			err := entry.server.ListenAndServe()
 
 			// If the error is that the port is in use, try again with a random port.
 			if err != nil && errors.Is(err, syscall.EADDRINUSE) {
 				randomPort := getRandomPort()
-				logger.Warn("proxy.Proxy", "Port %d for target %s is in use. Retrying on port %d", proxyConfig.LocalPort, proxyConfig.Url.String(), randomPort)
+				logger.Warn("proxy.Proxy", "Port %d for target %s is in use. Retrying on port %d", proxyConfig.localPort, proxyConfig.url.String(), randomPort)
 				entry.setAddr(fmt.Sprintf(":%d", randomPort))
 				err = entry.server.ListenAndServe() // Retry
 			}
 
 			if err != nil && !errors.Is(err, http.ErrServerClosed) {
-				logger.Error("proxy.Proxy", err, "Proxy for %s failed to start", proxyConfig.Url.String())
+				logger.Error("proxy.Proxy", err, "Proxy for %s failed to start", proxyConfig.url.String())
 			}
 		}()
 	}

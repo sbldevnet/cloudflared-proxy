@@ -41,9 +41,9 @@ func (m *MockServer) HTTPServer() *http.Server {
 // TestNewDirector validates that the director function is configured correctly.
 func TestNewDirector(t *testing.T) {
 	targetURL, _ := url.Parse("https://app.example.com")
-	config := CFAccessProxyConfig{
-		Url:   targetURL,
-		Token: "test-token",
+	config := accessProxyConfig{
+		url:   targetURL,
+		token: "test-token",
 	}
 
 	director := newDirector(config)
@@ -58,23 +58,23 @@ func TestNewDirector(t *testing.T) {
 	assert.Equal(t, "test-token", req.Header.Get("cf-access-token"))
 }
 
-func TestStartMultipleProxies(t *testing.T) {
+func TestRunnerServe(t *testing.T) {
 	// Backup and restore original functions
-	originalNewServer := newServer
 	originalGetRandomPort := getRandomPort
 	t.Cleanup(func() {
-		newServer = originalNewServer
 		getRandomPort = originalGetRandomPort
 	})
 
+	r := &Runner{}
+
 	t.Run("no proxy configs", func(t *testing.T) {
-		err := StartMultipleProxies(context.Background(), []CFAccessProxyConfig{})
+		err := r.serve(context.Background(), []accessProxyConfig{})
 		assert.EqualError(t, err, "no proxy configurations provided")
 	})
 
 	t.Run("invalid hostname with other valid hostnames", func(t *testing.T) {
 		var serverCreationCount int
-		newServer = func(addr string, handler http.Handler) Server {
+		r.newServer = func(addr string, handler http.Handler) server {
 			serverCreationCount++
 			mockSrvr := new(MockServer)
 			mockSrvr.On("ListenAndServe").Return(http.ErrServerClosed)
@@ -86,16 +86,16 @@ func TestStartMultipleProxies(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		u1, _ := url.Parse("https://app.example.com")
 		u2, _ := url.Parse("https://app2.example.com")
-		configs := []CFAccessProxyConfig{
-			{Url: u1, LocalPort: 8080},
-			{Url: u2, LocalPort: 8082},
+		configs := []accessProxyConfig{
+			{url: u1, localPort: 8080},
+			{url: u2, localPort: 8082},
 		}
 
 		var wg sync.WaitGroup
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			StartMultipleProxies(ctx, configs)
+			r.serve(ctx, configs)
 		}()
 
 		time.Sleep(100 * time.Millisecond)
@@ -107,14 +107,14 @@ func TestStartMultipleProxies(t *testing.T) {
 
 	t.Run("successful startup and shutdown", func(t *testing.T) {
 		mockSrvr := new(MockServer)
-		newServer = func(addr string, handler http.Handler) Server {
+		r.newServer = func(addr string, handler http.Handler) server {
 			return mockSrvr
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		u, _ := url.Parse("https://app.example.com")
-		configs := []CFAccessProxyConfig{
-			{Url: u, LocalPort: 8080},
+		configs := []accessProxyConfig{
+			{url: u, localPort: 8080},
 		}
 
 		mockSrvr.On("ListenAndServe").Return(http.ErrServerClosed).Once()
@@ -125,7 +125,7 @@ func TestStartMultipleProxies(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := StartMultipleProxies(ctx, configs)
+			err := r.serve(ctx, configs)
 			assert.NoError(t, err)
 		}()
 
@@ -138,15 +138,15 @@ func TestStartMultipleProxies(t *testing.T) {
 
 	t.Run("port in use with successful retry", func(t *testing.T) {
 		mockSrvr := new(MockServer)
-		newServer = func(addr string, handler http.Handler) Server {
+		r.newServer = func(addr string, handler http.Handler) server {
 			return mockSrvr
 		}
 		getRandomPort = func() int { return 9090 }
 
 		ctx, cancel := context.WithCancel(context.Background())
 		u, _ := url.Parse("https://app.example.com")
-		configs := []CFAccessProxyConfig{
-			{Url: u, LocalPort: 8080},
+		configs := []accessProxyConfig{
+			{url: u, localPort: 8080},
 		}
 
 		mockSrvr.On("ListenAndServe").Return(syscall.EADDRINUSE).Once()
@@ -158,7 +158,7 @@ func TestStartMultipleProxies(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := StartMultipleProxies(ctx, configs)
+			err := r.serve(ctx, configs)
 			assert.NoError(t, err)
 		}()
 
@@ -171,14 +171,14 @@ func TestStartMultipleProxies(t *testing.T) {
 
 	t.Run("listen and serve fails with generic error", func(t *testing.T) {
 		mockSrvr := new(MockServer)
-		newServer = func(addr string, handler http.Handler) Server {
+		r.newServer = func(addr string, handler http.Handler) server {
 			return mockSrvr
 		}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		u, _ := url.Parse("https://app.example.com")
-		configs := []CFAccessProxyConfig{
-			{Url: u, LocalPort: 8080},
+		configs := []accessProxyConfig{
+			{url: u, localPort: 8080},
 		}
 
 		genericError := errors.New("a generic error")
@@ -189,7 +189,7 @@ func TestStartMultipleProxies(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			err := StartMultipleProxies(ctx, configs)
+			err := r.serve(ctx, configs)
 			assert.NoError(t, err)
 		}()
 

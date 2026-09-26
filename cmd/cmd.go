@@ -80,7 +80,7 @@ func Run() *cobra.Command {
 			logger.Debug("cmd.Run", "Starting %d proxies", len(proxyConfigs))
 			logger.Debug("cmd.Run", "Proxy configs: %v", proxyConfigs)
 
-			return proxy.ProxyCFAccess(cmd.Context(), proxyConfigs, proxy.NewLiveProxyService())
+			return proxy.New().Run(cmd.Context(), proxyConfigs)
 		},
 	}
 
