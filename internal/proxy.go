@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/sbldevnet/cloudflared-proxy/internal/config"
+	"github.com/sbldevnet/cloudflared-proxy/config"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/proxy"
@@ -34,18 +34,18 @@ func (s *LiveProxyService) StartMultipleProxies(ctx context.Context, configs []p
 func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig, service ProxyService) error {
 	proxyConfigs := make([]proxy.CFAccessProxyConfig, len(configs))
 	for i, config := range configs {
-		token, err := service.GetCloudflareAccessTokenForApp(config.GetAddress())
+		token, err := service.GetCloudflareAccessTokenForApp(config.Address())
 		if err != nil {
 			if errors.Is(err, cloudflared.ErrAccessAppNotFound) {
-				logger.Warn("proxy.ProxyCFAccess", "Access application not found at %s, continuing without authentication", config.GetAddress())
+				logger.Warn("proxy.ProxyCFAccess", "Access application not found at %s, continuing without authentication", config.Address())
 			} else {
 				return err
 			}
 		}
 
-		url, err := url.Parse(fmt.Sprintf("https://%s", config.GetAddress()))
+		url, err := url.Parse(fmt.Sprintf("https://%s", config.Address()))
 		if err != nil {
-			return fmt.Errorf("error parsing target URL for %s: %w", config.GetAddress(), err)
+			return fmt.Errorf("error parsing target URL for %s: %w", config.Address(), err)
 		}
 
 		proxyConfigs[i] = proxy.CFAccessProxyConfig{
