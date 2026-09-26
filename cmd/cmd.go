@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/sbldevnet/cloudflared-proxy/config"
 	"github.com/sbldevnet/cloudflared-proxy/internal"
-	"github.com/sbldevnet/cloudflared-proxy/internal/config"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
 
 	"github.com/spf13/cobra"

@@ -88,13 +88,13 @@ func TestParseEndpointString(t *testing.T) {
 	}
 }
 
-func TestGetAddress(t *testing.T) {
+func TestAddress(t *testing.T) {
 	config := &ProxyConfig{
 		Hostname:        "app.example.com",
 		DestinationPort: 8080,
 	}
 	expected := "app.example.com:8080"
-	assert.Equal(t, expected, config.GetAddress())
+	assert.Equal(t, expected, config.Address())
 }
 
 func TestSetDefaults(t *testing.T) {

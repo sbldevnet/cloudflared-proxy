@@ -72,7 +72,7 @@ func ParseEndpointString(endpoint string) (*ProxyConfig, error) {
 }
 
 // Returns the full address of the target application.
-func (c *ProxyConfig) GetAddress() string {
+func (c *ProxyConfig) Address() string {
 	return fmt.Sprintf("%s:%d", c.Hostname, c.DestinationPort)
 }
 

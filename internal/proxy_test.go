@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/sbldevnet/cloudflared-proxy/internal/config"
+	"github.com/sbldevnet/cloudflared-proxy/config"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/pkg/proxy"
 
