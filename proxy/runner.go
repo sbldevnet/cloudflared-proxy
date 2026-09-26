@@ -14,7 +14,7 @@ import (
 
 // Runner starts reverse proxies to Cloudflare Access applications.
 type Runner struct {
-	tokenFetcher func(url string) (string, error)
+	tokenFetcher func(ctx context.Context, url string) (string, error)
 	newServer    func(addr string, handler http.Handler) server
 }
 
@@ -23,10 +23,10 @@ type Option func(*Runner)
 
 // WithTokenFetcher replaces how Cloudflare Access tokens are obtained.
 //
-// A fetcher receives the target address (host:port) and returns its token. It
-// must return cloudflared.ErrAccessAppNotFound to mean "no Access application
+// A fetcher receives the context of Run and the target address (host:port), and
+// returns its token. It should abort when the context is cancelled. It must return cloudflared.ErrAccessAppNotFound to mean "no Access application
 // exists at this address": the Runner then continues without a token.
-func WithTokenFetcher(f func(url string) (string, error)) Option {
+func WithTokenFetcher(f func(ctx context.Context, url string) (string, error)) Option {
 	return func(r *Runner) {
 		r.tokenFetcher = f
 	}
@@ -49,9 +49,12 @@ func New(opts ...Option) *Runner {
 func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 	proxyConfigs := make([]accessProxyConfig, len(configs))
 	for i, cfg := range configs {
-		token, err := r.tokenFetcher(cfg.Address())
+		token, err := r.tokenFetcher(ctx, cfg.Address())
 		if err != nil {
 			if !errors.Is(err, cloudflared.ErrAccessAppNotFound) {
+				if ctxErr := ctx.Err(); ctxErr != nil {
+					return fmt.Errorf("fetching Access token for %s: %w", cfg.Address(), ctxErr)
+				}
 				return err
 			}
 			logger.Warn("proxy.Runner", "Access application not found at %s, continuing without authentication", cfg.Address())

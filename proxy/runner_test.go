@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
@@ -52,7 +53,7 @@ func TestRunnerRun(t *testing.T) {
 		{Hostname: "app1.example.com", DestinationPort: 443, LocalPort: 8080},
 	}
 
-	newRunner := func(fetch func(string) (string, error)) (*Runner, *[]string, *[]http.Handler) {
+	newRunner := func(fetch func(context.Context, string) (string, error)) (*Runner, *[]string, *[]http.Handler) {
 		var addrs []string
 		var handlers []http.Handler
 		r := New(WithTokenFetcher(fetch))
@@ -76,7 +77,7 @@ func TestRunnerRun(t *testing.T) {
 		require.NoError(t, err)
 
 		var fetched []string
-		r, addrs, handlers := newRunner(func(u string) (string, error) {
+		r, addrs, handlers := newRunner(func(_ context.Context, u string) (string, error) {
 			fetched = append(fetched, u)
 			return "token123", nil
 		})
@@ -98,7 +99,7 @@ func TestRunnerRun(t *testing.T) {
 
 	t.Run("access app not found continues without token", func(t *testing.T) {
 		logOutput.Reset()
-		r, addrs, _ := newRunner(func(string) (string, error) {
+		r, addrs, _ := newRunner(func(context.Context, string) (string, error) {
 			return "", cloudflared.ErrAccessAppNotFound
 		})
 
@@ -109,18 +110,32 @@ func TestRunnerRun(t *testing.T) {
 	})
 
 	t.Run("token error aborts before starting servers", func(t *testing.T) {
-		r, addrs, _ := newRunner(func(string) (string, error) {
+		r, addrs, _ := newRunner(func(context.Context, string) (string, error) {
 			return "", errors.New("some-cf-error")
 		})
 
-		err := runWithCancelledContext(r, cfgs)
+		err := r.Run(context.Background(), cfgs)
 
 		assert.EqualError(t, err, "some-cf-error")
 		assert.Empty(t, *addrs)
 	})
 
+	t.Run("cancellation during fetch returns the context error", func(t *testing.T) {
+		r, addrs, _ := newRunner(func(ctx context.Context, _ string) (string, error) {
+			<-ctx.Done()
+			return "", errors.New("signal: killed")
+		})
+		ctx, cancel := context.WithCancel(context.Background())
+		time.AfterFunc(10*time.Millisecond, cancel)
+
+		err := r.Run(ctx, cfgs)
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Empty(t, *addrs)
+	})
+
 	t.Run("no configs", func(t *testing.T) {
-		r, _, _ := newRunner(func(string) (string, error) { return "", nil })
+		r, _, _ := newRunner(func(context.Context, string) (string, error) { return "", nil })
 
 		err := runWithCancelledContext(r, nil)
 
@@ -130,12 +145,12 @@ func TestRunnerRun(t *testing.T) {
 
 func TestWithTokenFetcher(t *testing.T) {
 	called := false
-	r := New(WithTokenFetcher(func(string) (string, error) {
+	r := New(WithTokenFetcher(func(context.Context, string) (string, error) {
 		called = true
 		return "t", nil
 	}))
 
-	token, err := r.tokenFetcher("host:443")
+	token, err := r.tokenFetcher(context.Background(), "host:443")
 
 	require.NoError(t, err)
 	assert.Equal(t, "t", token)
