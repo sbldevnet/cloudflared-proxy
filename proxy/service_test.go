@@ -1,4 +1,4 @@
-package internal
+package proxy
 
 import (
 	"bytes"
@@ -6,9 +6,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
-	"github.com/sbldevnet/cloudflared-proxy/pkg/cloudflared"
-	"github.com/sbldevnet/cloudflared-proxy/pkg/proxy"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
@@ -24,7 +23,7 @@ func (m *MockProxyService) CloudflareAccessTokenForApp(url string) (string, erro
 	return args.String(0), args.Error(1)
 }
 
-func (m *MockProxyService) StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error {
+func (m *MockProxyService) StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) error {
 	args := m.Called(ctx, configs)
 	return args.Error(0)
 }
@@ -52,7 +51,7 @@ func TestProxyCFAccess(t *testing.T) {
 			setupMocks: func(service *MockProxyService) {
 				service.On("CloudflareAccessTokenForApp", "app1.example.com:443").Return("token123", nil)
 				service.On("StartMultipleProxies", mock.Anything, mock.AnythingOfType("[]proxy.CFAccessProxyConfig")).Return(nil).Run(func(args mock.Arguments) {
-					configs := args.Get(1).([]proxy.CFAccessProxyConfig)
+					configs := args.Get(1).([]CFAccessProxyConfig)
 					assert.Len(t, configs, 1)
 					assert.Equal(t, "app1.example.com:443", configs[0].Url.Host)
 					assert.Equal(t, "token123", configs[0].Token)

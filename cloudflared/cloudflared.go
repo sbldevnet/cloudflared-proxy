@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
+	"github.com/sbldevnet/cloudflared-proxy/logger"
 )
 
 // Commander executes a command and returns its combined output.

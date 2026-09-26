@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
+	"github.com/sbldevnet/cloudflared-proxy/logger"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"

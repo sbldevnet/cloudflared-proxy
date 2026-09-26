@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
+	"github.com/sbldevnet/cloudflared-proxy/logger"
 )
 
 // Server defines the behavior of a server that can be started and shut down.

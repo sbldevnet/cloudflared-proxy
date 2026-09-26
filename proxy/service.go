@@ -1,4 +1,4 @@
-package internal
+package proxy
 
 import (
 	"context"
@@ -6,15 +6,14 @@ import (
 	"fmt"
 	"net/url"
 
+	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
-	"github.com/sbldevnet/cloudflared-proxy/pkg/cloudflared"
-	"github.com/sbldevnet/cloudflared-proxy/pkg/logger"
-	"github.com/sbldevnet/cloudflared-proxy/pkg/proxy"
+	"github.com/sbldevnet/cloudflared-proxy/logger"
 )
 
 type ProxyService interface {
 	CloudflareAccessTokenForApp(url string) (string, error)
-	StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error
+	StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) error
 }
 
 type LiveProxyService struct{}
@@ -27,12 +26,12 @@ func (s *LiveProxyService) CloudflareAccessTokenForApp(url string) (string, erro
 	return cloudflared.CloudflareAccessTokenForApp(url)
 }
 
-func (s *LiveProxyService) StartMultipleProxies(ctx context.Context, configs []proxy.CFAccessProxyConfig) error {
-	return proxy.StartMultipleProxies(ctx, configs)
+func (s *LiveProxyService) StartMultipleProxies(ctx context.Context, configs []CFAccessProxyConfig) error {
+	return StartMultipleProxies(ctx, configs)
 }
 
 func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig, service ProxyService) error {
-	proxyConfigs := make([]proxy.CFAccessProxyConfig, len(configs))
+	proxyConfigs := make([]CFAccessProxyConfig, len(configs))
 	for i, config := range configs {
 		token, err := service.CloudflareAccessTokenForApp(config.Address())
 		if err != nil {
@@ -48,7 +47,7 @@ func ProxyCFAccess(ctx context.Context, configs []config.ProxyConfig, service Pr
 			return fmt.Errorf("error parsing target URL for %s: %w", config.Address(), err)
 		}
 
-		proxyConfigs[i] = proxy.CFAccessProxyConfig{
+		proxyConfigs[i] = CFAccessProxyConfig{
 			Url:       url,
 			LocalPort: config.LocalPort,
 			Token:     token,
