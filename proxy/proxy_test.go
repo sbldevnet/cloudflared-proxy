@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -19,10 +18,15 @@ import (
 
 type MockServer struct {
 	mock.Mock
+	// listening, when set, receives one value after each ListenAndServe call is recorded.
+	listening chan<- struct{}
 }
 
 func (m *MockServer) ListenAndServe() error {
 	args := m.Called()
+	if m.listening != nil {
+		m.listening <- struct{}{}
+	}
 	return args.Error(0)
 }
 
@@ -38,6 +42,36 @@ func (m *MockServer) HTTPServer() *http.Server {
 		return &http.Server{Addr: server.Addr}
 	}
 	return nil
+}
+
+// serveUntilListening runs r.serve, waits for wantListens signals on listening,
+// then cancels the context and returns serve's error once it has returned.
+func serveUntilListening(t *testing.T, r *Runner, configs []accessProxyConfig, listening <-chan struct{}, wantListens int) error {
+	t.Helper()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	errc := make(chan error, 1)
+	go func() { errc <- r.serve(ctx, configs) }()
+
+	timeout := time.After(5 * time.Second)
+	for range wantListens {
+		select {
+		case <-listening:
+		case <-timeout:
+			t.Fatal("timed out waiting for servers to start listening")
+		}
+	}
+	cancel()
+
+	select {
+	case err := <-errc:
+		return err
+	case <-timeout:
+		t.Fatal("timed out waiting for serve to return")
+		return nil
+	}
 }
 
 // TestNewDirector validates that the director function is configured correctly.
@@ -94,16 +128,16 @@ func TestRunnerServe(t *testing.T) {
 
 	t.Run("invalid hostname with other valid hostnames", func(t *testing.T) {
 		var serverCreationCount int
+		listening := make(chan struct{}, 2)
 		r.newServer = func(addr string, handler http.Handler) server {
 			serverCreationCount++
-			mockSrvr := new(MockServer)
+			mockSrvr := &MockServer{listening: listening}
 			mockSrvr.On("ListenAndServe").Return(http.ErrServerClosed)
 			mockSrvr.On("Shutdown", mock.Anything).Return(nil)
 			mockSrvr.On("HTTPServer").Return(&http.Server{Addr: addr})
 			return mockSrvr
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
 		u1, _ := url.Parse("https://app.example.com")
 		u2, _ := url.Parse("https://app2.example.com")
 		configs := []accessProxyConfig{
@@ -111,27 +145,18 @@ func TestRunnerServe(t *testing.T) {
 			{url: u2, localPort: 8082},
 		}
 
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			r.serve(ctx, configs)
-		}()
-
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-		wg.Wait()
+		serveUntilListening(t, r, configs, listening, 2)
 
 		assert.Equal(t, 2, serverCreationCount, "should create two servers for the valid hostnames")
 	})
 
 	t.Run("successful startup and shutdown", func(t *testing.T) {
-		mockSrvr := new(MockServer)
+		listening := make(chan struct{}, 2)
+		mockSrvr := &MockServer{listening: listening}
 		r.newServer = func(addr string, handler http.Handler) server {
 			return mockSrvr
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
 			{url: u, localPort: 8080},
@@ -141,29 +166,19 @@ func TestRunnerServe(t *testing.T) {
 		mockSrvr.On("Shutdown", mock.Anything).Return(nil).Once()
 		// mockSrvr.On("HTTPServer").Return(&http.Server{Addr: ":8080"}).Maybe()
 
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := r.serve(ctx, configs)
-			assert.NoError(t, err)
-		}()
-
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-		wg.Wait()
+		assert.NoError(t, serveUntilListening(t, r, configs, listening, 1))
 
 		mockSrvr.AssertExpectations(t)
 	})
 
 	t.Run("port in use with successful retry", func(t *testing.T) {
-		mockSrvr := new(MockServer)
+		listening := make(chan struct{}, 2)
+		mockSrvr := &MockServer{listening: listening}
 		r.newServer = func(addr string, handler http.Handler) server {
 			return mockSrvr
 		}
 		getRandomPort = func() int { return 9090 }
 
-		ctx, cancel := context.WithCancel(context.Background())
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
 			{url: u, localPort: 8080},
@@ -174,28 +189,18 @@ func TestRunnerServe(t *testing.T) {
 		mockSrvr.On("Shutdown", mock.Anything).Return(nil).Once()
 		mockSrvr.On("HTTPServer").Return(&http.Server{Addr: ":8080"}).Maybe()
 
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := r.serve(ctx, configs)
-			assert.NoError(t, err)
-		}()
-
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-		wg.Wait()
+		assert.NoError(t, serveUntilListening(t, r, configs, listening, 2))
 
 		mockSrvr.AssertExpectations(t)
 	})
 
 	t.Run("listen and serve fails with generic error", func(t *testing.T) {
-		mockSrvr := new(MockServer)
+		listening := make(chan struct{}, 2)
+		mockSrvr := &MockServer{listening: listening}
 		r.newServer = func(addr string, handler http.Handler) server {
 			return mockSrvr
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
 			{url: u, localPort: 8080},
@@ -205,17 +210,7 @@ func TestRunnerServe(t *testing.T) {
 		mockSrvr.On("ListenAndServe").Return(genericError).Once()
 		mockSrvr.On("Shutdown", mock.Anything).Return(nil).Once()
 
-		var wg sync.WaitGroup
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			err := r.serve(ctx, configs)
-			assert.NoError(t, err)
-		}()
-
-		time.Sleep(100 * time.Millisecond)
-		cancel()
-		wg.Wait()
+		assert.NoError(t, serveUntilListening(t, r, configs, listening, 1))
 
 		mockSrvr.AssertExpectations(t)
 	})
