@@ -11,6 +11,7 @@ This tool allows you to proxy multiple Cloudflare Access protected applications 
 
 - **Multiple Endpoints**: Proxy multiple applications simultaneously.
 - **Flexible Configuration**: Use command-line flags or a configuration file (YAML, JSON, etc.).
+- **Local by Default**: Proxies listen on `127.0.0.1` unless you choose another address.
 - **TLS Configuration**: Option to skip TLS verification for non trusted certificates.
 
 ## Installation
@@ -60,6 +61,9 @@ You can specify endpoints directly on the command line.
 
 # Skip TLS verification
 ./cloudflared-proxy run -e example.com --skip-tls
+
+# Listen on another address (see "Exposing the proxy")
+./cloudflared-proxy run -e example.com --listen 0.0.0.0
 ```
 
 ### Configuration File
@@ -76,6 +80,15 @@ proxies:
     destinationPort: 8443
   - hostname: "app3.your-domain.com"
     skipTLS: true
+```
+
+To listen on another address, set `listen` at the top level (default for every proxy) and/or per proxy:
+```yaml
+listen: 0.0.0.0        # default for all proxies below
+proxies:
+  - hostname: "app1.your-domain.com"
+  - hostname: "app2.your-domain.com"
+    listen: 127.0.0.1  # this one stays local
 ```
 
 With a configuration file, you can start the proxies with a simple command:
@@ -110,6 +123,14 @@ Configuration priority:
    - If not found, the program will display help information
    - Example: `./cloudflared-proxy run`
 
+### Exposing the proxy
+
+By default every proxy listens on `127.0.0.1`. The proxy adds your Cloudflare Access token to every request it forwards, so only expose it on networks you trust.
+
+To listen on another address, use `--listen ADDR` or the `listen` config key (an IP address, not a hostname). The flag overrides the config file, and a per-proxy `listen` overrides the top-level one.
+
+If a client cannot connect through `localhost` (it only tries `::1`), use `127.0.0.1` instead.
+
 ## Use as a library
 
 The `proxy` package can be embedded in other Go programs:
@@ -125,7 +146,7 @@ err := proxy.New().Run(ctx, []config.ProxyConfig{
 })
 ```
 
-`Run` blocks until `ctx` is cancelled.
+`Run` blocks until `ctx` is cancelled. Set `ProxyConfig.Listen` to an IP address literal to change the listen address; an empty value means `127.0.0.1`.
 
 ---
 

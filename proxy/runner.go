@@ -10,6 +10,7 @@ import (
 
 	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
+	"github.com/sbldevnet/cloudflared-proxy/internal/listen"
 )
 
 // Runner starts reverse proxies to Cloudflare Access applications.
@@ -49,6 +50,17 @@ func New(opts ...Option) *Runner {
 // Run fetches Cloudflare Access tokens and starts one server per config,
 // blocking until ctx is cancelled.
 func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
+	listens := make([]string, len(configs))
+	for i, cfg := range configs {
+		listens[i] = cfg.Listen
+		if listens[i] == "" {
+			listens[i] = listen.Loopback
+		}
+		if err := listen.Validate(listens[i]); err != nil {
+			return fmt.Errorf("proxy %s: %w", cfg.Hostname, err)
+		}
+	}
+
 	proxyConfigs := make([]accessProxyConfig, len(configs))
 	for i, cfg := range configs {
 		r.log.Debug("fetching Access token", "address", cfg.Address())
@@ -71,6 +83,7 @@ func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 		proxyConfigs[i] = accessProxyConfig{
 			url:       target,
 			localPort: cfg.LocalPort,
+			listen:    listens[i],
 			token:     token,
 			skipTLS:   cfg.SkipTLS,
 		}
