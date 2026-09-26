@@ -95,6 +95,11 @@ func (s *addrRecordingServer) ListenAndServe() error {
 func (s *addrRecordingServer) Shutdown(context.Context) error { return nil }
 func (s *addrRecordingServer) HTTPServer() *http.Server       { return &s.Server }
 
+const (
+	allInterfacesWarning   = "proxy listens on every network interface, so it is reachable from other machines, and forwards requests with your Cloudflare Access token"
+	specificAddressWarning = "proxy is reachable from other machines and forwards requests with your Cloudflare Access token"
+)
+
 // TestNewDirector validates that the director function is configured correctly.
 func TestNewDirector(t *testing.T) {
 	targetURL, _ := url.Parse("https://app.example.com")
@@ -255,14 +260,14 @@ func TestRunnerServe(t *testing.T) {
 
 	t.Run("warns once when not loopback", func(t *testing.T) {
 		for _, tc := range []struct {
-			listen   string
-			wantWarn bool
+			listen  string
+			wantMsg string
 		}{
-			{"127.0.0.1", false},
-			{"::1", false},
-			{"0.0.0.0", true},
-			{"::", true},
-			{"192.168.1.10", true},
+			{"127.0.0.1", ""},
+			{"::1", ""},
+			{"0.0.0.0", allInterfacesWarning},
+			{"::", allInterfacesWarning},
+			{"192.168.1.10", specificAddressWarning},
 		} {
 			logs := &recordingHandler{}
 			lr := New(WithLogger(slog.New(logs)))
@@ -277,11 +282,13 @@ func TestRunnerServe(t *testing.T) {
 
 			assert.NoError(t, serveUntilListening(t, lr, []accessProxyConfig{{url: u, localPort: 8080, listen: tc.listen}}, listening, 1))
 
-			attrs, warned := logs.find("proxy is reachable from other machines and forwards requests with your Cloudflare Access token")
-			assert.Equal(t, tc.wantWarn, warned, tc.listen)
-			if warned {
-				assert.Equal(t, slog.LevelWarn, attrs["level"])
-				assert.Equal(t, tc.listen, attrs["listen"])
+			for _, msg := range []string{allInterfacesWarning, specificAddressWarning} {
+				attrs, warned := logs.find(msg)
+				assert.Equal(t, msg == tc.wantMsg, warned, "%s: %s", tc.listen, msg)
+				if warned {
+					assert.Equal(t, slog.LevelWarn, attrs["level"])
+					assert.Equal(t, tc.listen, attrs["listen"])
+				}
 			}
 			start, ok := logs.find("starting proxy server")
 			require.True(t, ok)

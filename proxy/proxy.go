@@ -112,7 +112,10 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 		go func() {
 			defer wg.Done()
 			r.log.Info("starting proxy server", "listen", proxyConfig.listen, "local_port", proxyConfig.localPort, "target", proxyConfig.url.String())
-			if !listen.IsLoopback(proxyConfig.listen) {
+			switch {
+			case listen.IsUnspecified(proxyConfig.listen):
+				r.log.Warn("proxy listens on every network interface, so it is reachable from other machines, and forwards requests with your Cloudflare Access token", "listen", proxyConfig.listen, "local_port", proxyConfig.localPort, "target", proxyConfig.url.String())
+			case !listen.IsLoopback(proxyConfig.listen):
 				r.log.Warn("proxy is reachable from other machines and forwards requests with your Cloudflare Access token", "listen", proxyConfig.listen, "local_port", proxyConfig.localPort, "target", proxyConfig.url.String())
 			}
 

@@ -136,7 +136,13 @@ To listen on another address, use the `--listen ADDR` flag or the `listen` confi
 
 A `WARN` is logged for every proxy that listens on a non-loopback address.
 
-For containers or other machines, prefer the address of a specific interface (for example the Docker bridge address) over `0.0.0.0` when possible, because it exposes less.
+On loopback, any local user or process can use the proxy, and therefore your Access token, not only the person running it. On a shared or untrusted network, a firewall or an authenticating reverse proxy in front of the proxy is the real control.
+
+**Containers reaching a proxy on the host.** On Rancher Desktop (Lima), a container reached a proxy bound to `127.0.0.1` through `host.docker.internal`, and also one bound to `0.0.0.0`, so `listen: 0.0.0.0` was not needed there. This may not hold for other setups. On Linux with native Docker, the host is reached through the bridge gateway, so `listen` may have to be an address on that bridge, or `0.0.0.0`.
+
+Binding a Docker bridge address exposes the proxy to every container on that network and to anything else that can reach the bridge, not to a single container. The bridge address only exists while Docker is running, so the proxy fails to start without it.
+
+**Proxy inside a container.** If you publish its port with `-p PORT:PORT`, Docker publishes it on all host interfaces regardless of `listen`. Use `-p 127.0.0.1:PORT:PORT` to keep it local.
 
 `localhost` clients that resolve to `::1` first fall back to `127.0.0.1` (for example `curl` and Go clients); if yours does not, use `127.0.0.1` explicitly or set `--listen ::1`.
 

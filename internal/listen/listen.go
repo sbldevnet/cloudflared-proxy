@@ -23,3 +23,10 @@ func IsLoopback(addr string) bool {
 	ip, err := netip.ParseAddr(addr)
 	return err == nil && ip.IsLoopback()
 }
+
+// IsUnspecified reports whether addr is 0.0.0.0 or ::, which bind every
+// network interface.
+func IsUnspecified(addr string) bool {
+	ip, err := netip.ParseAddr(addr)
+	return err == nil && ip.IsUnspecified()
+}

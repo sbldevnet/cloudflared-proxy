@@ -45,3 +45,11 @@ func TestIsLoopback(t *testing.T) {
 	assert.False(t, IsLoopback("192.168.1.10"))
 	assert.False(t, IsLoopback("localhost"))
 }
+
+func TestIsUnspecified(t *testing.T) {
+	assert.True(t, IsUnspecified("0.0.0.0"))
+	assert.True(t, IsUnspecified("::"))
+	assert.False(t, IsUnspecified("127.0.0.1"))
+	assert.False(t, IsUnspecified("192.168.1.10"))
+	assert.False(t, IsUnspecified("localhost"))
+}
