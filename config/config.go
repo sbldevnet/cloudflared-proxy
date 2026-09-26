@@ -28,15 +28,11 @@ type Config struct {
 // ParseEndpointString parses a string representation of a proxy endpoint
 // into a ProxyConfig struct. The format is [LOCAL_PORT:]HOSTNAME[:DEST_PORT].
 //
-// A part is a port only if the whole token is a number between 1 and 65535;
-// anything else, such as "8x8.com" or "443x", is not a port. A single part is
-// always the hostname, so "12345" is a valid numeric hostname.
-//
-// With two parts the input is LOCAL_PORT:HOSTNAME if the first part is a
-// port, and HOSTNAME:DEST_PORT otherwise. The one ambiguity this leaves is a
-// purely numeric hostname with only a destination port: "12345:443" is local
-// port 12345 and hostname "443". Use the three-part form to avoid it, e.g.
-// "8888:12345:443".
+// A part is a port only if the whole token is a number from 1 to 65535, so
+// "8x8.com" is a hostname. With two parts, the first is the local port if it is
+// a port and the second is the destination port otherwise. This leaves one
+// ambiguity: "12345:443" is local port 12345 and hostname "443". Use the
+// three-part form ("8888:12345:443") for a numeric hostname.
 func ParseEndpointString(endpoint string) (*ProxyConfig, error) {
 	if endpoint == "" {
 		return nil, fmt.Errorf("endpoint cannot be empty. Expected format: [LOCAL_PORT:]HOSTNAME[:DEST_PORT]")
