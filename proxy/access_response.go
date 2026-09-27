@@ -37,7 +37,10 @@ func isAccessLoginRedirect(resp *http.Response) bool {
 }
 
 // acceptsHTML reports whether req looks like it came from a browser, based on
-// its Accept header.
+// its Accept header. This is content negotiation, not a security boundary:
+// the client already gets the same Access rejection either way, and the
+// header is client-controlled, so it must not be relied on to withhold the
+// redirect or target details from a non-browser client.
 func acceptsHTML(req *http.Request) bool {
 	if req == nil {
 		return false

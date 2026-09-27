@@ -9,7 +9,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -23,27 +22,38 @@ func TestTokenHolder(t *testing.T) {
 }
 
 func TestTokenManagerTriggerRenewalSingleFlight(t *testing.T) {
+	const concurrent = 10
+
 	var calls int32
+	release := make(chan struct{})
 	fetch := func(ctx context.Context, address string) (string, error) {
 		atomic.AddInt32(&calls, 1)
-		// Long enough for every concurrent caller below to be scheduled and
-		// join this flight instead of racing ahead ot start its own.
-		time.Sleep(50 * time.Millisecond)
+		<-release
 		return "new-token", nil
 	}
 
 	holder := newTokenHolder("old-token")
 	tm := newTokenManager("app.example.com:443", fetch, holder, slog.New(slog.DiscardHandler))
 
-	const concurrent = 10
+	// calling reaches zero only once every goroutine below is about to call
+	// triggerRenewal; release, closed only afterwards, keeps whichever one
+	// becomes the leader blocked in fetch until then, so every other one
+	// joins that single in-flight call instead of starting its own.
+	var calling sync.WaitGroup
+	calling.Add(concurrent)
+
 	var wg sync.WaitGroup
 	wg.Add(concurrent)
 	for range concurrent {
 		go func() {
 			defer wg.Done()
+			calling.Done()
 			tm.triggerRenewal(context.Background())
 		}()
 	}
+
+	calling.Wait()
+	close(release)
 	wg.Wait()
 
 	assert.Equal(t, int32(1), calls, "concurrent triggers should be coalesced into one fetch")

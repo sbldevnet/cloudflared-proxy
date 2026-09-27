@@ -65,7 +65,6 @@ func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 	for i, cfg := range configs {
 		r.log.Debug("fetching Access token", "address", cfg.Address())
 		token, err := r.tokenFetcher(ctx, cfg.Address())
-		hasAccessApp := true
 		if err != nil {
 			if !errors.Is(err, cloudflared.ErrAccessAppNotFound) {
 				if ctxErr := ctx.Err(); ctxErr != nil {
@@ -73,7 +72,6 @@ func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 				}
 				return fmt.Errorf("fetching Access token for %s: %w", cfg.Address(), err)
 			}
-			hasAccessApp = false
 			r.log.Warn("Access application not found, continuing without authentication", "address", cfg.Address())
 		}
 
@@ -83,12 +81,11 @@ func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 		}
 
 		proxyConfigs[i] = accessProxyConfig{
-			url:          target,
-			localPort:    cfg.LocalPort,
-			listen:       listens[i],
-			tokenHolder:  newTokenHolder(token),
-			hasAccessApp: hasAccessApp,
-			skipTLS:      cfg.SkipTLS,
+			url:         target,
+			localPort:   cfg.LocalPort,
+			listen:      listens[i],
+			tokenHolder: newTokenHolder(token),
+			skipTLS:     cfg.SkipTLS,
 		}
 	}
 

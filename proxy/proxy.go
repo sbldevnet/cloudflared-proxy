@@ -57,11 +57,7 @@ func newDirector(log *slog.Logger, config accessProxyConfig) func(*http.Request)
 		req.URL.Host = config.url.Host
 		req.Host = config.url.Host
 
-		var token string
-		if config.tokenHolder != nil {
-			token = config.tokenHolder.load()
-		}
-		if token == "" {
+		if token := config.tokenHolder.load(); token == "" {
 			req.Header.Del("cf-access-token")
 		} else {
 			req.Header.Set("cf-access-token", token)
@@ -72,12 +68,11 @@ func newDirector(log *slog.Logger, config accessProxyConfig) func(*http.Request)
 }
 
 type accessProxyConfig struct {
-	url          *url.URL
-	tokenHolder  *tokenHolder
-	hasAccessApp bool
-	localPort    uint16
-	listen       string
-	skipTLS      bool
+	url         *url.URL
+	tokenHolder *tokenHolder
+	localPort   uint16
+	listen      string
+	skipTLS     bool
 }
 
 // addr is tracked outside http.Server.Addr: the retry goroutine reassigns
@@ -118,7 +113,7 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 		proxy.Transport = transport
 		proxy.Director = newDirector(r.log, proxyConfig)
 
-		if proxyConfig.hasAccessApp {
+		if proxyConfig.tokenHolder.load() != "" {
 			tm := newTokenManager(proxyConfig.url.Host, r.tokenFetcher, proxyConfig.tokenHolder, r.log)
 			proxy.ModifyResponse = newModifyResponse(ctx, r.log, proxyConfig.url.Host, tm)
 		}

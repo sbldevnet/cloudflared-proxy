@@ -214,8 +214,8 @@ func TestRunnerServe(t *testing.T) {
 		u1, _ := url.Parse("https://app.example.com")
 		u2, _ := url.Parse("https://app2.example.com")
 		configs := []accessProxyConfig{
-			{url: u1, localPort: 8080, listen: "127.0.0.1"},
-			{url: u2, localPort: 8082, listen: "127.0.0.1"},
+			{url: u1, tokenHolder: newTokenHolder(""), localPort: 8080, listen: "127.0.0.1"},
+			{url: u2, tokenHolder: newTokenHolder(""), localPort: 8082, listen: "127.0.0.1"},
 		}
 
 		serveUntilListening(t, r, configs, listening, 2)
@@ -232,7 +232,7 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080, listen: "127.0.0.1"},
+			{url: u, tokenHolder: newTokenHolder(""), localPort: 8080, listen: "127.0.0.1"},
 		}
 
 		mockSrvr.On("ListenAndServe").Return(http.ErrServerClosed).Once()
@@ -254,7 +254,7 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080, listen: "127.0.0.1"},
+			{url: u, tokenHolder: newTokenHolder(""), localPort: 8080, listen: "127.0.0.1"},
 		}
 
 		mockSrvr.On("ListenAndServe").Return(syscall.EADDRINUSE).Once()
@@ -276,7 +276,7 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080, listen: "127.0.0.1"},
+			{url: u, tokenHolder: newTokenHolder(""), localPort: 8080, listen: "127.0.0.1"},
 		}
 
 		genericError := errors.New("a generic error")
@@ -300,8 +300,8 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080, listen: "127.0.0.1"},
-			{url: u, localPort: 8081, listen: "127.0.0.1"},
+			{url: u, tokenHolder: newTokenHolder(""), localPort: 8080, listen: "127.0.0.1"},
+			{url: u, tokenHolder: newTokenHolder(""), localPort: 8081, listen: "127.0.0.1"},
 		}
 
 		err := serveWithTimeout(t, r, configs)
@@ -326,8 +326,8 @@ func TestRunnerServe(t *testing.T) {
 
 		u, _ := url.Parse("https://app.example.com")
 		configs := []accessProxyConfig{
-			{url: u, localPort: 8080, listen: "127.0.0.1"},
-			{url: u, localPort: 8081, listen: "127.0.0.1"},
+			{url: u, tokenHolder: newTokenHolder(""), localPort: 8080, listen: "127.0.0.1"},
+			{url: u, tokenHolder: newTokenHolder(""), localPort: 8081, listen: "127.0.0.1"},
 		}
 
 		assert.NoError(t, serveUntilListening(t, r, configs, listening, 2))
@@ -343,7 +343,7 @@ func TestRunnerServe(t *testing.T) {
 		getRandomPort = func() int { return 9090 }
 
 		u, _ := url.Parse("https://app.example.com")
-		configs := []accessProxyConfig{{url: u, localPort: 8080, listen: "::1"}}
+		configs := []accessProxyConfig{{url: u, tokenHolder: newTokenHolder(""), localPort: 8080, listen: "::1"}}
 
 		assert.NoError(t, serveUntilListening(t, r, configs, listening, 2))
 
@@ -372,7 +372,7 @@ func TestRunnerServe(t *testing.T) {
 			}
 			u, _ := url.Parse("https://app.example.com")
 
-			assert.NoError(t, serveUntilListening(t, lr, []accessProxyConfig{{url: u, localPort: 8080, listen: tc.listen}}, listening, 1))
+			assert.NoError(t, serveUntilListening(t, lr, []accessProxyConfig{{url: u, tokenHolder: newTokenHolder(""), localPort: 8080, listen: tc.listen}}, listening, 1))
 
 			for _, msg := range []string{allInterfacesWarning, specificAddressWarning} {
 				attrs, warned := logs.find(msg)
