@@ -55,6 +55,10 @@ func newTokenManager(address string, fetch tokenFetchFunc, holder *tokenHolder, 
 	return &tokenManager{address: address, fetch: fetch, holder: holder, log: log}
 }
 
+// renewGroupKey is the singleflight.Group key used for the single renewal
+// call each tokenManager ever has in flight at a time.
+const renewGroupKey = "renew"
+
 // triggerRenewal fetches a fresh token and stores it, unless a previous
 // attempt is still in its cooldown. Concurrent callers are coalesced onto a
 // single fetch.
@@ -66,21 +70,26 @@ func (m *tokenManager) triggerRenewal(ctx context.Context) {
 		return
 	}
 
-	_, _, _ = m.group.Do("renew", func() (any, error) {
-		m.log.Debug("renewing Access token", "address", m.address)
-		token, err := m.fetch(ctx, m.address)
-		if err != nil {
-			if ctx.Err() == nil {
-				m.log.Error("failed to renew Access token", "address", m.address, "error", err)
-				m.mu.Lock()
-				m.cooldownEnd = time.Now().Add(loginCooldown)
-				m.mu.Unlock()
-			}
-			return nil, err
-		}
+	_, _, _ = m.group.Do(renewGroupKey, func() (any, error) { return m.renewOnce(ctx) })
+}
 
-		m.holder.store(token)
-		m.log.Debug("renewed Access token", "address", m.address)
-		return nil, nil
-	})
+// renewOnce fetches a fresh token and stores it, or starts a cooldown if it
+// failed. It is meant to run behind m.group, so it executes at most once per
+// in-flight renewal regardless of how many callers triggered it.
+func (m *tokenManager) renewOnce(ctx context.Context) (any, error) {
+	m.log.Debug("renewing Access token", "address", m.address)
+	token, err := m.fetch(ctx, m.address)
+	if err != nil {
+		if ctx.Err() == nil {
+			m.log.Error("failed to renew Access token", "address", m.address, "error", err)
+			m.mu.Lock()
+			m.cooldownEnd = time.Now().Add(loginCooldown)
+			m.mu.Unlock()
+		}
+		return nil, err
+	}
+
+	m.holder.store(token)
+	m.log.Debug("renewed Access token", "address", m.address)
+	return nil, nil
 }

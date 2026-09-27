@@ -6,11 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/singleflight"
 )
 
 func TestTokenHolder(t *testing.T) {
@@ -35,26 +36,30 @@ func TestTokenManagerTriggerRenewalSingleFlight(t *testing.T) {
 	holder := newTokenHolder("old-token")
 	tm := newTokenManager("app.example.com:443", fetch, holder, slog.New(slog.DiscardHandler))
 
-	// calling reaches zero only once every goroutine below is about to call
-	// triggerRenewal; release, closed only afterwards, keeps whichever one
-	// becomes the leader blocked in fetch until then, so every other one
-	// joins that single in-flight call instead of starting its own.
-	var calling sync.WaitGroup
-	calling.Add(concurrent)
-
-	var wg sync.WaitGroup
-	wg.Add(concurrent)
-	for range concurrent {
-		go func() {
-			defer wg.Done()
-			calling.Done()
-			tm.triggerRenewal(context.Background())
-		}()
+	// DoChan registers a call and returns immediately without blocking the
+	// caller (the first one starts renewOnce in its own goroutine; every
+	// later one just joins it) — see golang.org/x/sync/singleflight's
+	// implementation. Calling it here in a plain sequential loop, before
+	// release is closed, therefore deterministically joins every one of
+	// these onto the same in-flight fetch: none of them can have returned
+	// yet, since fetch is still blocked on release. This avoids depending on
+	// goroutine-scheduling timing, which a concurrent-goroutines version of
+	// this test previously did and which could flake (each goroutine calling
+	// triggerRenewal after signalling readiness, but before actually
+	// reaching singleflight.Group.Do, racing against the leader's fetch
+	// already unblocking).
+	ctx := context.Background()
+	results := make([]<-chan singleflight.Result, concurrent)
+	for i := range results {
+		results[i] = tm.group.DoChan(renewGroupKey, func() (any, error) { return tm.renewOnce(ctx) })
 	}
 
-	calling.Wait()
 	close(release)
-	wg.Wait()
+
+	for _, res := range results {
+		r := <-res
+		require.NoError(t, r.Err)
+	}
 
 	assert.Equal(t, int32(1), calls, "concurrent triggers should be coalesced into one fetch")
 	assert.Equal(t, "new-token", holder.load())
