@@ -86,5 +86,13 @@ func CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error
 		return "", fmt.Errorf("cloudflared token failed: %s", string(output))
 	}
 
-	return string(output), nil
+	// cloudflared can exit 0 with empty stdout when it has no cached token for
+	// the application (it prints the reason to stderr instead); forwarding an
+	// empty token would be indistinguishable from a real one downstream.
+	token := strings.TrimSpace(string(output))
+	if token == "" {
+		return "", errors.New("cloudflared returned an empty token")
+	}
+
+	return token, nil
 }

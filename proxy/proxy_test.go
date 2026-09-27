@@ -117,8 +117,8 @@ const (
 func TestNewDirector(t *testing.T) {
 	targetURL, _ := url.Parse("https://app.example.com")
 	config := accessProxyConfig{
-		url:   targetURL,
-		token: "test-token",
+		url:         targetURL,
+		tokenHolder: newTokenHolder("test-token"),
 	}
 
 	director := newDirector(slog.New(slog.DiscardHandler), config)
@@ -135,7 +135,7 @@ func TestNewDirector(t *testing.T) {
 
 func TestNewDirectorReplacesClientAccessToken(t *testing.T) {
 	targetURL, _ := url.Parse("https://app.example.com")
-	director := newDirector(slog.New(slog.DiscardHandler), accessProxyConfig{url: targetURL, token: "proxy-token"})
+	director := newDirector(slog.New(slog.DiscardHandler), accessProxyConfig{url: targetURL, tokenHolder: newTokenHolder("proxy-token")})
 
 	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
 	req.Header.Set("cf-access-token", "client-token")
@@ -144,11 +144,34 @@ func TestNewDirectorReplacesClientAccessToken(t *testing.T) {
 	assert.Equal(t, []string{"proxy-token"}, req.Header.Values("cf-access-token"))
 }
 
+func TestNewDirectorOmitsHeaderWhenNoToken(t *testing.T) {
+	targetURL, _ := url.Parse("https://app.example.com")
+	director := newDirector(slog.New(slog.DiscardHandler), accessProxyConfig{url: targetURL, tokenHolder: newTokenHolder("")})
+
+	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
+	req.Header.Set("cf-access-token", "client-token")
+	director(req)
+
+	assert.Empty(t, req.Header.Values("cf-access-token"))
+}
+
+func TestNewDirectorUsesRenewedToken(t *testing.T) {
+	targetURL, _ := url.Parse("https://app.example.com")
+	holder := newTokenHolder("old-token")
+	director := newDirector(slog.New(slog.DiscardHandler), accessProxyConfig{url: targetURL, tokenHolder: holder})
+
+	holder.store("new-token")
+	req := httptest.NewRequest("GET", "http://localhost:8080/", nil)
+	director(req)
+
+	assert.Equal(t, "new-token", req.Header.Get("cf-access-token"))
+}
+
 func TestNewDirectorDoesNotLogSecrets(t *testing.T) {
 	var buf bytes.Buffer
 	log := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	targetURL, _ := url.Parse("https://app.example.com")
-	director := newDirector(log, accessProxyConfig{url: targetURL, token: "secret-cf-token", localPort: 8080})
+	director := newDirector(log, accessProxyConfig{url: targetURL, tokenHolder: newTokenHolder("secret-cf-token"), localPort: 8080})
 
 	req := httptest.NewRequest("GET", "http://localhost:8080/api?token=secret-query", nil)
 	req.Header.Set("Authorization", "Bearer secret-bearer")
