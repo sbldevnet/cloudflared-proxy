@@ -133,6 +133,13 @@ func Run() *cobra.Command {
 	cmd.Flags().StringVar(&logLevel, "log-level", "", "Log level (debug, info, warn, error)")
 	cmd.Flags().StringVar(&logFormat, "log-format", "", "Log format (text, json)")
 
+	if err := cmd.RegisterFlagCompletionFunc("log-level", cobra.FixedCompletions(logLevels, cobra.ShellCompDirectiveNoFileComp)); err != nil {
+		panic(err)
+	}
+	if err := cmd.RegisterFlagCompletionFunc("log-format", cobra.FixedCompletions(logFormats, cobra.ShellCompDirectiveNoFileComp)); err != nil {
+		panic(err)
+	}
+
 	return cmd
 }
 
