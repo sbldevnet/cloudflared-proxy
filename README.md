@@ -137,8 +137,6 @@ By default every proxy listens on `127.0.0.1`. The proxy adds your Cloudflare Ac
 
 To listen on another address, use `--listen ADDR` or the `listen` config key (an IP address, not a hostname). The flag overrides the config file, and a per-proxy `listen` overrides the top-level one.
 
-If a client cannot connect through `localhost` (it only tries `::1`), use `127.0.0.1` instead.
-
 ## Use as a library
 
 The `proxy` package can be embedded in other Go programs:
@@ -157,6 +155,7 @@ err = proxy.New(proxy.WithLogger(logger)).Run(ctx, configs)
 ```
 
 `Run` blocks until `ctx` is cancelled. Set `ProxyConfig.Listen` to an IP address literal to change the listen address; an empty value means `127.0.0.1`.
+
 ---
 
 For more details on Cloudflare Tunnels, see the [official documentation](https://developers.cloudflare.com/cloudflare-one/tutorials/cli/).
