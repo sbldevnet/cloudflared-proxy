@@ -49,9 +49,6 @@ func (c *execCommander) StreamStderr(ctx context.Context, w io.Writer, name stri
 	return captured.buf, err
 }
 
-// cmdr is the command runner used by the package. It can be replaced in tests.
-var cmdr Commander = &execCommander{}
-
 const (
 	accessAppNotFoundMsg = "failed to find Access application"
 	cloudflaredDocURL    = "https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation"
@@ -59,13 +56,45 @@ const (
 
 var ErrAccessAppNotFound = errors.New("access application not found")
 
-// loginOutput receives the live output of `cloudflared access login`, which is
-// where cloudflared prints the URL to open manually on headless machines.
-var loginOutput io.Writer = os.Stderr
+// Client fetches Cloudflare Access tokens via the cloudflared CLI.
+type Client struct {
+	cmdr Commander
+	// loginOutput receives the live output of `cloudflared access login`, which
+	// is where cloudflared prints the URL to open manually on headless machines.
+	loginOutput io.Writer
+}
 
-func CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error) {
+// Option configures a Client.
+type Option func(*Client)
+
+// WithCommander sets the Commander used to run cloudflared. Used in tests to
+// inject a fake.
+func WithCommander(c Commander) Option {
+	return func(cl *Client) { cl.cmdr = c }
+}
+
+// WithLoginOutput sets the writer that receives the live output of
+// `cloudflared access login`. Used in tests to capture it.
+func WithLoginOutput(w io.Writer) Option {
+	return func(cl *Client) { cl.loginOutput = w }
+}
+
+// New returns a ready-to-use Client; by default it runs the real cloudflared
+// binary and forwards login output to os.Stderr.
+func New(opts ...Option) *Client {
+	c := &Client{
+		cmdr:        &execCommander{},
+		loginOutput: os.Stderr,
+	}
+	for _, opt := range opts {
+		opt(c)
+	}
+	return c
+}
+
+func (c *Client) CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error) {
 	// --quiet keeps the JWT off stdout; only stderr is forwarded to the user.
-	output, err := cmdr.StreamStderr(ctx, loginOutput, "cloudflared", "access", "login", "--quiet", url)
+	output, err := c.cmdr.StreamStderr(ctx, c.loginOutput, "cloudflared", "access", "login", "--quiet", url)
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
 			return "", fmt.Errorf("cloudflared is not installed. Please install it first: %s", cloudflaredDocURL)
@@ -81,7 +110,7 @@ func CloudflareAccessTokenForApp(ctx context.Context, url string) (string, error
 		return "", fmt.Errorf("cloudflared login failed: %w", err)
 	}
 
-	output, err = cmdr.CombinedOutput(ctx, "cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
+	output, err = c.cmdr.CombinedOutput(ctx, "cloudflared", "access", "token", fmt.Sprintf("-app=%s", url))
 	if err != nil {
 		return "", fmt.Errorf("cloudflared token failed: %s", string(output))
 	}

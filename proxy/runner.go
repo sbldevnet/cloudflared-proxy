@@ -37,7 +37,7 @@ func WithLogger(l *slog.Logger) Option {
 // New returns a ready-to-use Runner; by default it uses the real cloudflared binary.
 func New(opts ...Option) *Runner {
 	r := &Runner{
-		tokenFetcher: cloudflared.CloudflareAccessTokenForApp,
+		tokenFetcher: cloudflared.New().CloudflareAccessTokenForApp,
 		newServer:    newHTTPServer,
 		log:          slog.Default(),
 	}
