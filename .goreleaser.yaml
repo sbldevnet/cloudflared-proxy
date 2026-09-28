@@ -15,7 +15,7 @@ builds:
       - amd64
       - arm64
     ldflags:
-      '-s -w -X github.com/sbldevnet/{{ .ProjectName }}/cmd.version={{.Version}} -X github.com/sbldevnet/{{ .ProjectName }}/cmd.commit={{.Commit}}'
+      '-s -w -X github.com/sbldevnet/{{ .ProjectName }}/internal/cmd.version={{.Version}} -X github.com/sbldevnet/{{ .ProjectName }}/internal/cmd.commit={{.Commit}}'
 
 universal_binaries:
   - replace: true

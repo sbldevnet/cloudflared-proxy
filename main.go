@@ -6,7 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/sbldevnet/cloudflared-proxy/cmd"
+	"github.com/sbldevnet/cloudflared-proxy/internal/cmd"
 )
 
 func main() {

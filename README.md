@@ -153,7 +153,6 @@ err := proxy.New().Run(ctx, []config.ProxyConfig{
 ```
 
 `Run` blocks until `ctx` is cancelled. Set `ProxyConfig.Listen` to an IP address literal to change the listen address; an empty value means `127.0.0.1`.
-
 ---
 
 For more details on Cloudflare Tunnels, see the [official documentation](https://developers.cloudflare.com/cloudflare-one/tutorials/cli/).

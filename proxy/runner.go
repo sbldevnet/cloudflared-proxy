@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
+	"github.com/sbldevnet/cloudflared-proxy/internal/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/internal/listen"
 )
 
