@@ -1,3 +1,5 @@
+// Package proxy runs reverse proxies to Cloudflare Access applications,
+// attaching Access tokens to forwarded requests.
 package proxy
 
 import (

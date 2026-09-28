@@ -1,3 +1,5 @@
+// Package config defines the proxy configuration schema and parses it from
+// command-line endpoint strings or a config file.
 package config
 
 import (
