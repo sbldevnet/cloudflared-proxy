@@ -69,17 +69,17 @@ func resolveLogOptions(flagLevel, flagFormat string, levelFlagSet, formatFlagSet
 // withConfig fills in the settings that no flag or environment variable set
 // from the logLevel and logFormat keys of the loaded config file. It reports
 // whether anything changed.
-func (o logOptions) withConfig() (logOptions, bool, error) {
+func (o logOptions) withConfig(v *viper.Viper) (logOptions, bool, error) {
 	changed := false
-	if !o.levelSet && viper.IsSet("logLevel") {
-		level, err := parseLogLevel("logLevel", viper.GetString("logLevel"))
+	if !o.levelSet && v.IsSet("logLevel") {
+		level, err := parseLogLevel("logLevel", v.GetString("logLevel"))
 		if err != nil {
 			return o, false, err
 		}
 		o.level, changed = level, true
 	}
-	if !o.formatSet && viper.IsSet("logFormat") {
-		json, err := parseLogFormat("logFormat", viper.GetString("logFormat"))
+	if !o.formatSet && v.IsSet("logFormat") {
+		json, err := parseLogFormat("logFormat", v.GetString("logFormat"))
 		if err != nil {
 			return o, false, err
 		}

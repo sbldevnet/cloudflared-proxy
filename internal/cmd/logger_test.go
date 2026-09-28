@@ -145,13 +145,12 @@ func logFromEnv() *slog.Logger {
 // resolveWithConfig runs the full resolution: flag, environment, then the config file.
 func resolveWithConfig(t *testing.T, flag, env, cfg string, key, envName string) (logOptions, error) {
 	t.Helper()
-	viper.Reset()
-	t.Cleanup(viper.Reset)
+	v := viper.New()
 	t.Setenv("LOG_LEVEL", "")
 	t.Setenv("LOG_FORMAT", "")
 	t.Setenv(envName, env)
 	if cfg != "" {
-		viper.Set(key, cfg)
+		v.Set(key, cfg)
 	}
 	var o logOptions
 	var err error
@@ -163,7 +162,7 @@ func resolveWithConfig(t *testing.T, flag, env, cfg string, key, envName string)
 	if err != nil {
 		return o, err
 	}
-	o, _, err = o.withConfig()
+	o, _, err = o.withConfig(v)
 	return o, err
 }
 
@@ -238,9 +237,6 @@ func TestInvalidFlagAndConfigValues(t *testing.T) {
 func TestInvalidEnvLevelWarns(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "bogus")
 	t.Setenv("LOG_FORMAT", "")
-	viper.Reset()
-	t.Cleanup(viper.Reset)
-	viper.Set("logFormat", "json")
 
 	o, err := resolveLogOptions("", "", false, false)
 	require.NoError(t, err)
@@ -251,8 +247,7 @@ func TestInvalidEnvLevelWarns(t *testing.T) {
 func TestConfigFileLogSettingsApplyAfterLoading(t *testing.T) {
 	t.Setenv("LOG_LEVEL", "")
 	t.Setenv("LOG_FORMAT", "")
-	viper.Reset()
-	t.Cleanup(viper.Reset)
+	v := viper.New()
 	file := filepath.Join(t.TempDir(), "cfg.yaml")
 	require.NoError(t, os.WriteFile(file, []byte("logLevel: debug\nlogFormat: json\nproxies: []\n"), 0o600))
 
@@ -260,8 +255,8 @@ func TestConfigFileLogSettingsApplyAfterLoading(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, slog.LevelInfo, o.level)
 
-	require.NoError(t, initConfig(slog.New(&recordingHandler{}), file))
-	o, changed, err := o.withConfig()
+	require.NoError(t, initConfig(v, slog.New(&recordingHandler{}), file))
+	o, changed, err := o.withConfig(v)
 	require.NoError(t, err)
 	assert.True(t, changed)
 
