@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -216,6 +217,17 @@ func TestSkipTLSPrecedence(t *testing.T) {
 			assert.Equal(t, wantWarned, warned)
 		})
 	}
+}
+
+func TestVersionOutput(t *testing.T) {
+	cmd := Execute()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetArgs([]string{"version"})
+
+	require.NoError(t, cmd.Execute())
+
+	assert.Contains(t, out.String(), "Version:")
 }
 
 func ptr[T any](v T) *T { return &v }
