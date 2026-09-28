@@ -14,6 +14,8 @@ builds:
     goarch:
       - amd64
       - arm64
+    flags:
+      - -trimpath
     ldflags:
       '-s -w -X github.com/sbldevnet/{{ .ProjectName }}/internal/cmd.version={{.Version}} -X github.com/sbldevnet/{{ .ProjectName }}/internal/cmd.commit={{.Commit}}'
 
