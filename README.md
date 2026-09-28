@@ -135,7 +135,7 @@ The log level and format can be set with `--log-level` and `--log-format` or wit
 
 By default every proxy listens on `127.0.0.1`. The proxy adds your Cloudflare Access token to every request it forwards, so only expose it on networks you trust.
 
-To listen on another address, use `--listen ADDR` or the `listen` config key (an IP address, not a hostname). The flag overrides the config file, and a per-proxy `listen` overrides the top-level one.
+To listen on another address, use `--listen ADDR` or the `listen` config key. The flag overrides the config file, and a per-proxy `listen` overrides the top-level one.
 
 ## Use as a library
 
