@@ -81,11 +81,11 @@ func (r *Runner) Run(ctx context.Context, configs []config.ProxyConfig) error {
 		}
 
 		proxyConfigs[i] = accessProxyConfig{
-			url:       target,
-			localPort: cfg.LocalPort,
-			listen:    listens[i],
-			token:     token,
-			skipTLS:   cfg.SkipTLS,
+			url:         target,
+			localPort:   cfg.LocalPort,
+			listen:      listens[i],
+			tokenHolder: newTokenHolder(token),
+			skipTLS:     cfg.SkipTLS,
 		}
 	}
 

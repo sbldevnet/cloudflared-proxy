@@ -56,18 +56,23 @@ func newDirector(log *slog.Logger, config accessProxyConfig) func(*http.Request)
 		req.URL.Scheme = config.url.Scheme
 		req.URL.Host = config.url.Host
 		req.Host = config.url.Host
-		req.Header.Set("cf-access-token", config.token)
+
+		if token := config.tokenHolder.load(); token == "" {
+			req.Header.Del("cf-access-token")
+		} else {
+			req.Header.Set("cf-access-token", token)
+		}
 
 		log.Debug("proxying request", "local_port", config.localPort, "method", req.Method, "path", req.URL.Path)
 	}
 }
 
 type accessProxyConfig struct {
-	url       *url.URL
-	token     string
-	localPort uint16
-	listen    string
-	skipTLS   bool
+	url         *url.URL
+	tokenHolder *tokenHolder
+	localPort   uint16
+	listen      string
+	skipTLS     bool
 }
 
 // addr is tracked outside http.Server.Addr: the retry goroutine reassigns
@@ -107,6 +112,11 @@ func (r *Runner) serve(ctx context.Context, configs []accessProxyConfig) error {
 		proxy := httputil.NewSingleHostReverseProxy(proxyConfig.url)
 		proxy.Transport = transport
 		proxy.Director = newDirector(r.log, proxyConfig)
+
+		if proxyConfig.tokenHolder.load() != "" {
+			tm := newTokenManager(proxyConfig.url.Host, r.tokenFetcher, proxyConfig.tokenHolder, r.log)
+			proxy.ModifyResponse = newModifyResponse(ctx, r.log, proxyConfig.url.Host, tm)
+		}
 
 		addr := net.JoinHostPort(proxyConfig.listen, strconv.Itoa(int(proxyConfig.localPort)))
 		entry := &serverEntry{server: r.newServer(addr, proxy)}

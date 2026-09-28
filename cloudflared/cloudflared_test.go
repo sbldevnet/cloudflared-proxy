@@ -124,6 +124,34 @@ func TestCloudflareAccessTokenForAppWithMock(t *testing.T) {
 		mockCmdr.AssertExpectations(t)
 	})
 
+	t.Run("empty token is an error", func(t *testing.T) {
+		mockCmdr := new(MockCommander)
+		cmdr = mockCmdr
+
+		mockCmdr.On("StreamStderr", mock.Anything, "cloudflared", "access", "login", "--quiet", "app.example.com/empty").Return([]byte(""), nil)
+		mockCmdr.On("CombinedOutput", "cloudflared", "access", "token", "-app=app.example.com/empty").Return([]byte("  \n"), nil)
+
+		_, err := CloudflareAccessTokenForApp(context.Background(), "app.example.com/empty")
+
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "empty token")
+		mockCmdr.AssertExpectations(t)
+	})
+
+	t.Run("trims whitespace from the token", func(t *testing.T) {
+		mockCmdr := new(MockCommander)
+		cmdr = mockCmdr
+
+		mockCmdr.On("StreamStderr", mock.Anything, "cloudflared", "access", "login", "--quiet", "app.example.com/trim").Return([]byte(""), nil)
+		mockCmdr.On("CombinedOutput", "cloudflared", "access", "token", "-app=app.example.com/trim").Return([]byte("  token-with-space \n"), nil)
+
+		token, err := CloudflareAccessTokenForApp(context.Background(), "app.example.com/trim")
+
+		assert.NoError(t, err)
+		assert.Equal(t, "token-with-space", token)
+		mockCmdr.AssertExpectations(t)
+	})
+
 	t.Run("token fails", func(t *testing.T) {
 		mockCmdr := new(MockCommander)
 		cmdr = mockCmdr
