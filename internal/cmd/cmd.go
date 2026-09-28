@@ -70,7 +70,8 @@ func Run() *cobra.Command {
 				}
 			} else {
 				// If config or default provided
-				if err := initConfig(log, cfgFile); err != nil {
+				v := viper.New()
+				if err := initConfig(v, log, cfgFile); err != nil {
 					return err
 				}
 
@@ -78,21 +79,21 @@ func Run() *cobra.Command {
 				// built, because loading it logs; its log settings therefore apply
 				// from here on and messages logged while loading follow the flag and
 				// environment only.
-				logOpts, changed, err := logOpts.withConfig()
+				logOpts, changed, err := logOpts.withConfig(v)
 				if err != nil {
 					return err
 				}
 				if changed {
 					log = logOpts.logger()
 				}
-				log.Debug("config file loaded", "path", viper.ConfigFileUsed())
+				log.Debug("config file loaded", "path", v.ConfigFileUsed())
 
-				if !viper.IsSet("proxies") {
+				if !v.IsSet("proxies") {
 					return fmt.Errorf("no proxies defined in config file")
 				}
 
 				var cfg config.Config
-				if err := viper.Unmarshal(&cfg); err != nil {
+				if err := v.Unmarshal(&cfg); err != nil {
 					return fmt.Errorf("unable to decode into struct, %v", err)
 				}
 				config.SetDefaults(cfg.Proxies)
@@ -193,11 +194,11 @@ func validateListen(proxies []config.ProxyConfig) error {
 	return nil
 }
 
-func initConfig(log *slog.Logger, cfgFile string) error {
+func initConfig(v *viper.Viper, log *slog.Logger, cfgFile string) error {
 	var dir string
 	if cfgFile != "" {
 		log.Debug("using explicit config file", "path", cfgFile)
-		viper.SetConfigFile(cfgFile)
+		v.SetConfigFile(cfgFile)
 	} else {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -205,11 +206,11 @@ func initConfig(log *slog.Logger, cfgFile string) error {
 		}
 		dir = filepath.Join(home, ".config", "cloudflared-proxy")
 		log.Debug("using default config location", "path", dir)
-		viper.AddConfigPath(dir)
-		viper.SetConfigName("config")
+		v.AddConfigPath(dir)
+		v.SetConfigName("config")
 	}
 
-	if err := viper.ReadInConfig(); err != nil {
+	if err := v.ReadInConfig(); err != nil {
 		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
 			if cfgFile != "" {
 				return fmt.Errorf("config file not found: %s", cfgFile)
