@@ -127,6 +127,8 @@ Configuration priority:
 
 `--skip-tls` skips certificate verification for every proxy, in both `--endpoints` and config-file mode, and takes precedence over the per-proxy `skipTLS` key. A warning is logged for each proxy that skips verification.
 
+### Logging
+
 The log level and format can be set with `--log-level` and `--log-format` or with the `logLevel` and `logFormat` config keys. The `LOG_LEVEL` and `LOG_FORMAT` environment variables still work. Precedence is flag, environment variable, config file, then the defaults (`info`, `text`).
 
 ### Exposing the proxy
@@ -150,6 +152,8 @@ import (
 err := proxy.New().Run(ctx, []config.ProxyConfig{
 	{Hostname: "example.com", DestinationPort: 443, LocalPort: 8888},
 })
+// Or with a custom logger:
+err = proxy.New(proxy.WithLogger(logger)).Run(ctx, configs)
 ```
 
 `Run` blocks until `ctx` is cancelled. Set `ProxyConfig.Listen` to an IP address literal to change the listen address; an empty value means `127.0.0.1`.
