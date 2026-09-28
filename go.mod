@@ -1,6 +1,6 @@
 module github.com/sbldevnet/cloudflared-proxy
 
-go 1.27.1
+go 1.26.0
 
 require (
 	github.com/spf13/cobra v1.10.2
