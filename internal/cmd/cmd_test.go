@@ -52,8 +52,6 @@ func (h *recordingHandler) messages() [][2]string {
 
 func TestInitConfigDiagnostics(t *testing.T) {
 	setup := func(t *testing.T) (*slog.Logger, *recordingHandler) {
-		viper.Reset()
-		t.Cleanup(viper.Reset)
 		h := &recordingHandler{}
 		return slog.New(h), h
 	}
@@ -63,7 +61,7 @@ func TestInitConfigDiagnostics(t *testing.T) {
 		file := filepath.Join(t.TempDir(), "cfg.yaml")
 		require.NoError(t, os.WriteFile(file, []byte("proxies: []\n"), 0o600))
 
-		require.NoError(t, initConfig(log, file))
+		require.NoError(t, initConfig(viper.New(), log, file))
 
 		assert.Equal(t, [][2]string{{"using explicit config file", file}}, h.messages())
 	})
@@ -76,7 +74,7 @@ func TestInitConfigDiagnostics(t *testing.T) {
 		require.NoError(t, os.MkdirAll(dir, 0o700))
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("proxies: []\n"), 0o600))
 
-		require.NoError(t, initConfig(log, ""))
+		require.NoError(t, initConfig(viper.New(), log, ""))
 
 		assert.Equal(t, [][2]string{{"using default config location", dir}}, h.messages())
 	})
@@ -87,7 +85,7 @@ func TestInitConfigDiagnostics(t *testing.T) {
 		t.Setenv("HOME", home)
 		dir := filepath.Join(home, ".config", "cloudflared-proxy")
 
-		err := initConfig(log, "")
+		err := initConfig(viper.New(), log, "")
 
 		assert.EqualError(t, err, "no config file or endpoints provided")
 		assert.Equal(t, [][2]string{
@@ -132,8 +130,7 @@ func TestValidateListen(t *testing.T) {
 }
 
 func TestListenConfigKeys(t *testing.T) {
-	viper.Reset()
-	t.Cleanup(viper.Reset)
+	v := viper.New()
 	file := filepath.Join(t.TempDir(), "cfg.yaml")
 	yaml := `listen: 0.0.0.0
 proxies:
@@ -142,10 +139,10 @@ proxies:
     listen: 127.0.0.1
 `
 	require.NoError(t, os.WriteFile(file, []byte(yaml), 0o600))
-	require.NoError(t, initConfig(slog.New(&recordingHandler{}), file))
+	require.NoError(t, initConfig(v, slog.New(&recordingHandler{}), file))
 
 	var cfg config.Config
-	require.NoError(t, viper.Unmarshal(&cfg))
+	require.NoError(t, v.Unmarshal(&cfg))
 	applyListenDefault(cfg.Proxies, cfg.Listen)
 
 	assert.Equal(t, "0.0.0.0", cfg.Listen)
