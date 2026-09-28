@@ -154,6 +154,18 @@ err := proxy.New().Run(ctx, []config.ProxyConfig{
 
 `Run` blocks until `ctx` is cancelled. Set `ProxyConfig.Listen` to an IP address literal to change the listen address; an empty value means `127.0.0.1`.
 
+## Stability
+
+From v1.0.0, everything below is covered by [SemVer](https://semver.org/): it only changes in a backwards-incompatible way in a new major version.
+
+- **CLI flags**: `--config`/`-c`, `--endpoints`/`-e`, `--skip-tls`/`-s`, `--listen`, `--log-level`, `--log-format`, their short forms, defaults and precedence (flag, then environment variable, then config file, then default) as documented above.
+- **Config file schema**: the `listen`, `logLevel`, `logFormat` and `proxies` keys and the `hostname`, `destinationPort`, `localPort`, `skipTLS`, `listen` keys of each proxy entry, as shown in `config.example.yaml`.
+- **Environment variables**: `LOG_LEVEL` and `LOG_FORMAT`, as a fallback below the corresponding flags and above the config file.
+- **Exit codes**: `0` on success (including a clean shutdown from `SIGINT`/`SIGTERM`), `1` on any error (invalid flags, an unreadable config file, or a runtime failure starting or running a proxy). There are no other exit codes.
+- **Library packages**: `config` and `proxy`, and every exported identifier they currently expose. `internal/*` is not part of the public API and can change at any time.
+
+Everything else — in particular the `internal/cmd` and `internal/cloudflared` packages, and any exported identifier not listed above — is an implementation detail and may change without a major version bump.
+
 ---
 
 For more details on Cloudflare Tunnels, see the [official documentation](https://developers.cloudflare.com/cloudflare-one/tutorials/cli/).

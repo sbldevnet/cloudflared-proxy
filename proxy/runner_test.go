@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sbldevnet/cloudflared-proxy/cloudflared"
 	"github.com/sbldevnet/cloudflared-proxy/config"
+	"github.com/sbldevnet/cloudflared-proxy/internal/cloudflared"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

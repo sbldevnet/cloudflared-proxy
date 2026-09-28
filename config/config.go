@@ -7,13 +7,16 @@ import (
 )
 
 const (
-	DefaultLocalPort       uint16 = 8888
+	// DefaultLocalPort is the local port a ProxyConfig uses when it does not set one.
+	DefaultLocalPort uint16 = 8888
+	// DefaultDestinationPort is the destination port a ProxyConfig uses when it does not set one.
 	DefaultDestinationPort uint16 = 443
 
 	minPort = 1
 	maxPort = 65535
 )
 
+// ProxyConfig describes a single reverse proxy to a Cloudflare Access application.
 type ProxyConfig struct {
 	Hostname        string `mapstructure:"hostname"`
 	DestinationPort uint16 `mapstructure:"destinationPort"`
@@ -25,6 +28,7 @@ type ProxyConfig struct {
 	Listen string `mapstructure:"listen"`
 }
 
+// Config is the top-level configuration file schema.
 type Config struct {
 	// Listen is the default for proxies that do not set their own Listen.
 	Listen  string        `mapstructure:"listen"`
@@ -99,12 +103,12 @@ func parsePort(s string) (uint16, error) {
 	return uint16(port), nil
 }
 
-// Returns the full address of the target application.
+// Address returns the full address of the target application.
 func (c *ProxyConfig) Address() string {
 	return fmt.Sprintf("%s:%d", c.Hostname, c.DestinationPort)
 }
 
-// Sets the default values, if not provided, for the proxy configuration.
+// SetDefaults sets the default values, if not provided, for the proxy configuration.
 func SetDefaults(proxies []ProxyConfig) {
 	for i := range proxies {
 		if proxies[i].LocalPort == 0 {
