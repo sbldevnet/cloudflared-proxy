@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -210,7 +211,8 @@ func initConfig(log *slog.Logger, cfgFile string) error {
 	}
 
 	if err := viper.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+		var notFoundErr viper.ConfigFileNotFoundError
+		if errors.As(err, &notFoundErr) {
 			if cfgFile != "" {
 				return fmt.Errorf("config file not found: %s", cfgFile)
 			}
