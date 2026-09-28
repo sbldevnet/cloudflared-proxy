@@ -6,18 +6,44 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "[dep][actions]"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "github_actions"
+    groups:
+      github-actions-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gomod"
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "[dep][go]"
       include: "scope"
+    labels:
+      - "dependencies"
+      - "go"
     groups:
-      golang-dependencies:
+      spf13:
+        patterns:
+          - "github.com/spf13/*"
+        update-types:
+          - "minor"
+          - "patch"
+      go-minor-patch:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
