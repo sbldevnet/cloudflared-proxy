@@ -3,6 +3,8 @@
 ![logo](./img/logo.png#gh-light-mode-only)
 ![logo](./img/logo_dark.png#gh-dark-mode-only)
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/sbldevnet/cloudflared-proxy.svg)](https://pkg.go.dev/github.com/sbldevnet/cloudflared-proxy)
+
 A flexible reverse proxy for Cloudflare Access applications.
 
 This tool allows you to proxy multiple Cloudflare Access protected applications to your local machine, with easy configuration via command-line flags or a configuration file.

@@ -1,3 +1,13 @@
+// Command cloudflared-proxy runs local reverse proxies to Cloudflare Access
+// applications, authenticating through cloudflared.
+//
+// Usage:
+//
+//	cloudflared-proxy [flags]
+//
+// To use it as a library, see the packages
+// [github.com/sbldevnet/cloudflared-proxy/proxy] and
+// [github.com/sbldevnet/cloudflared-proxy/config].
 package main
 
 import (
