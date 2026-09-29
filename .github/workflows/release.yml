@@ -32,3 +32,17 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  pkgsite:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    environment: pkg-go-dev
+    permissions: {}
+    steps:
+      - name: Refresh pkg.go.dev
+        env:
+          MODULE: github.com/sbldevnet/cloudflared-proxy
+          VERSION: ${{ github.ref_name }}
+        run: |
+          curl -fsS "https://proxy.golang.org/${MODULE}/@v/${VERSION}.info"
+          curl -fsS -X POST "https://pkg.go.dev/fetch/${MODULE}@${VERSION}"
